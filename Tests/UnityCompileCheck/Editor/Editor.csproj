@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- GrandStrategy.Editor.asmdef: editor only, references GrandStrategy.Game. -->
+  <PropertyGroup>
+    <AssemblyName>GrandStrategy.Editor</AssemblyName>
+    <DefineConstants>$(DefineConstants);UNITY_EDITOR;UNITY_2021_3_OR_NEWER</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(ScriptsDir)Editor/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Game/Game.csproj" />
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" PrivateAssets="all" />
+    <!-- Only UnityEditor.dll is taken from this package; its UnityEngine.dll would clash with the modules. -->
+    <PackageReference Include="Unity3D.SDK" Version="2021.1.14.1" PrivateAssets="all" ExcludeAssets="all" GeneratePathProperty="true" />
+    <Reference Include="$(PkgUnity3D_SDK)/lib/UnityEditor.dll" Private="false" />
+  </ItemGroup>
+</Project>

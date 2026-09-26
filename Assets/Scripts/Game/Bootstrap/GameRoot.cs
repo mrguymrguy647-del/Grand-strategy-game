@@ -497,10 +497,7 @@ namespace GrandStrategy.Game
                     Sim.Events.RaiseProtests(player);
                     break;
                 case "random":
-                    double chance = Sim.PoliticsRules.randomEventChance;
-                    Sim.PoliticsRules.randomEventChance = 1;
-                    Sim.Events.Monthly(World.Clock.Date);
-                    Sim.PoliticsRules.randomEventChance = chance;
+                    Sim.Events.RaiseRandomEvent(player);
                     break;
                 case "trade_offer":
                     var friend = World.Countries.Where(c => c != player && !c.IsEliminated && !Sim.Diplomacy.AreTradePartners(c, player))

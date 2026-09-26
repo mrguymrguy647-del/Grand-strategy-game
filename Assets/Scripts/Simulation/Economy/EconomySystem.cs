@@ -296,7 +296,7 @@ namespace GrandStrategy.Simulation
         }
 
         /// <summary>Updates the previews (budget, growth, political targets) after a policy change.</summary>
-        internal void Refresh(Country c)
+        public void Refresh(Country c)
         {
             ComputeBudget(c);
             ComputeGrowth(c);

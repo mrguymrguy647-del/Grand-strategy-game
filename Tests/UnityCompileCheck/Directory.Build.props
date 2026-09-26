@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    Compiles Assets/Scripts the way Unity does: one assembly per .asmdef, C# 9, with each
+    assembly seeing only the assemblies its .asmdef references. Uses Unity's reference
+    assemblies from NuGet (2021.3 API), so it runs without Unity.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <OutputType>Library</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ScriptsDir>$(MSBuildThisFileDirectory)../../Assets/Scripts/</ScriptsDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

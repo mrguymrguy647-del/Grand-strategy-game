@@ -128,6 +128,7 @@ Run the tests. This needs the .NET 8 SDK, but not Unity:
 ```
 dotnet test Tests/Simulation.Tests   # clock, world, Capital Battle, economy, politics, diplomacy, a 10-year world run
 dotnet test Tests/Audio.Tests        # every music loop and sound effect renders cleanly
+dotnet build Tests/UnityCompileCheck # compiles Assets/Scripts like Unity: one assembly per .asmdef, C# 9
 ```
 
 Rebuild the map data after changing the generators:

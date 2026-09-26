@@ -103,7 +103,7 @@ namespace GrandStrategy.Simulation
 
         // ------------------------------------------------------------------ politics
 
-        internal void RaiseProtests(Country c)
+        public void RaiseProtests(Country c)
         {
             double cost = Gdp(c) * 0.003;
             var e = new NationalEvent("protests", $"Mass protests in {c.Name}",
@@ -162,7 +162,7 @@ namespace GrandStrategy.Simulation
 
         // ------------------------------------------------------------------ diplomacy
 
-        internal void RaiseTradeOffer(Country player, Country from)
+        public void RaiseTradeOffer(Country player, Country from)
         {
             var e = new NationalEvent("trade_offer", $"{from.Name} proposes a trade agreement",
                 $"The government of {from.Name} wants to lower trade barriers between our countries. Both economies would grow faster.",
@@ -195,6 +195,14 @@ namespace GrandStrategy.Simulation
         }
 
         // ------------------------------------------------------------------ random
+
+        /// <summary>Raises one random event now (used by the developer panel). Does nothing while an event is waiting.</summary>
+        public void RaiseRandomEvent(Country c)
+        {
+            if (c == null || c.IsEliminated || c.Politics == null || c.Politics.Overthrown || _pending.Count > 0)
+                return;
+            RaiseRandom(c);
+        }
 
         void RaiseRandom(Country c)
         {

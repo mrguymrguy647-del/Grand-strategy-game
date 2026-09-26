@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- GrandStrategy.Simulation.asmdef: noEngineReferences, so no Unity assemblies here. -->
+  <PropertyGroup>
+    <AssemblyName>GrandStrategy.Simulation</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(ScriptsDir)Simulation/**/*.cs" />
+  </ItemGroup>
+</Project>
