@@ -13,7 +13,10 @@ namespace GrandStrategy.Game
     {
         const int MaxEntries = 30;
 
+        static ErrorConsole _instance;
+
         readonly List<string> _entries = new List<string>();
+        Rect _drawn; // screen area of the box, in GUI coordinates (y down)
         int _count;
         bool _collapsed;
         Vector2 _scroll;
@@ -29,8 +32,26 @@ namespace GrandStrategy.Game
             go.AddComponent<ErrorConsole>();
         }
 
-        void OnEnable() => Application.logMessageReceived += OnLog;
-        void OnDisable() => Application.logMessageReceived -= OnLog;
+        void OnEnable()
+        {
+            _instance = this;
+            Application.logMessageReceived += OnLog;
+        }
+
+        void OnDisable()
+        {
+            Application.logMessageReceived -= OnLog;
+            if (_instance == this)
+                _instance = null;
+        }
+
+        /// <summary>True if the error box is drawn at this screen position (y up), so clicks there don't reach the map.</summary>
+        public static bool Covers(Vector2 screenPosition)
+        {
+            if (_instance == null || _instance._count == 0)
+                return false;
+            return _instance._drawn.Contains(new Vector2(screenPosition.x, Screen.height - screenPosition.y));
+        }
 
         void OnLog(string message, string stackTrace, LogType type)
         {
@@ -53,7 +74,8 @@ namespace GrandStrategy.Game
 
             if (_collapsed)
             {
-                if (GUI.Button(new Rect(12, Screen.height - 44, 190, 32), $"Show errors ({_count})"))
+                _drawn = new Rect(12, Screen.height - 44, 190, 32);
+                if (GUI.Button(_drawn, $"Show errors ({_count})"))
                     _collapsed = false;
                 return;
             }
@@ -61,6 +83,7 @@ namespace GrandStrategy.Game
             float width = Mathf.Min(820, Screen.width - 24);
             float height = Mathf.Min(300, Screen.height * 0.45f);
             var rect = new Rect((Screen.width - width) / 2f, Screen.height - height - 12, width, height);
+            _drawn = rect;
             GUI.color = new Color(1f, 0.55f, 0.5f, 1f);
             GUI.Box(rect, GUIContent.none);
             GUI.Box(rect, GUIContent.none);

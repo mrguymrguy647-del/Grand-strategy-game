@@ -38,6 +38,15 @@ namespace GrandStrategy.Game.UI
         public bool PopupOpen => _popup != null && _popup.IsOpen;
         public Country PanelCountry => _panel?.Country;
 
+        /// <summary>True if Resources/UI/Game.uss was found (the self-test checks it).</summary>
+        public bool StylesheetLoaded { get; private set; }
+        public VisualElement Root => _root;
+        public VisualElement CountryPanelRoot => _panel?.Root;
+        public VisualElement TopBarRoot => _topBar?.Root;
+        public VisualElement MapModeBarRoot => _modes?.Root;
+        public TooltipManager Tooltips => _tips;
+        public bool GameOverShown => _gameOver != null && Ui.IsShown(_gameOver.Root);
+
         public void Initialize(GameRoot game)
         {
             _game = game;
@@ -45,9 +54,7 @@ namespace GrandStrategy.Game.UI
 
             var vignette = Ui.Element();
             Ui.Fill(vignette);
-            var vt = Resources.Load<Texture2D>("UI/Textures/vignette");
-            if (vt != null)
-                vignette.style.backgroundImage = new StyleBackground(vt);
+            vignette.style.backgroundImage = new StyleBackground(Ui.Vignette());
             _root.Add(vignette);
 
             MapLabelLayer = Ui.Element();
@@ -120,6 +127,7 @@ namespace GrandStrategy.Game.UI
             _root.pickingMode = PickingMode.Ignore;
             Ui.Fill(_root);
             var sheet = Resources.Load<StyleSheet>("UI/Game");
+            StylesheetLoaded = sheet != null;
             if (sheet != null)
                 _root.styleSheets.Add(sheet);
             else
@@ -147,6 +155,8 @@ namespace GrandStrategy.Game.UI
         /// <summary>True if the screen position is over a UI element that should block map input.</summary>
         public bool IsPointerOverUI(Vector2 screenPosition)
         {
+            if (ErrorConsole.Covers(screenPosition))
+                return true;
             var panel = _root?.panel;
             if (panel == null)
                 return false;
@@ -201,6 +211,8 @@ namespace GrandStrategy.Game.UI
         /// <summary>Closes the top-most closable overlay. Returns false if nothing was open.</summary>
         public bool CloseOverlay()
         {
+            if (_popup.CloseMessage())
+                return true;
             if (Ui.IsShown(_settings.Root))
             {
                 Ui.Show(_settings.Root, false);
@@ -239,6 +251,7 @@ namespace GrandStrategy.Game.UI
         {
             _panel.Show(country, provinceId);
             Ui.Show(_banner.Root, _game.Phase == GamePhase.NationSelect && country == null);
+            _dev.RefreshIfShown(); // its Capital Battle buttons target the selected country
         }
 
         public void OpenCountryTab(string tab) => _panel.OpenTab(tab);
@@ -252,5 +265,14 @@ namespace GrandStrategy.Game.UI
         public void AddNews(NewsItem item) => _news.Add(item);
 
         public void ShowGameOver(string title, string text) => _gameOver.Show(title, text);
+        public void HideGameOver() => _gameOver.Hide();
+
+        /// <summary>Self-test: answers whatever popup is on screen.</summary>
+        public void AnswerPopupForTest() => _popup.AnswerForTest();
+
+        public void ShowCustomPopup(string icon, string title, System.Action<VisualElement> buildBody) =>
+            _popup.ShowCustom(icon, title, buildBody);
+
+        public void ClosePopup() => _popup.CloseMessage();
     }
 }

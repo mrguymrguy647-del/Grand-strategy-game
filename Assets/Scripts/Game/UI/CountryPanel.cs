@@ -36,7 +36,12 @@ namespace GrandStrategy.Game.UI
         Country _country;
         int _provinceId;
         bool _dirty;
-        bool _dragging;
+        bool _hovered;
+        float _lastRebuild;
+
+        // While the pointer is over the panel, the monthly refresh waits at least this long
+        // between rebuilds, so rows under the pointer don't keep flickering at high speed.
+        const float HoveredRebuildSeconds = 1f;
 
         // Live sections of the Economy tab, refreshed while sliders move.
         VisualElement _budgetBox;
@@ -59,8 +64,10 @@ namespace GrandStrategy.Game.UI
             Ui.Absolute(Root, 12, 76, null, 56);
             Root.style.width = 480;
             Root.style.flexDirection = FlexDirection.Column;
+            Root.RegisterCallback<PointerEnterEvent>(_ => _hovered = true);
+            Root.RegisterCallback<PointerLeaveEvent>(_ => _hovered = false);
 
-            var header = Ui.Element("gs-panel__header", true);
+            var header = Ui.Header();
             _flag = Ui.FlagElement(null, "gs-flag--large");
             _flag.style.marginRight = 12;
             header.Add(_flag);
@@ -152,8 +159,16 @@ namespace GrandStrategy.Game.UI
         /// <summary>Called every frame by the HUD.</summary>
         public void Tick()
         {
-            if (_dirty && !_dragging && _country != null && Ui.IsShown(Root))
-                Rebuild();
+            if (!_dirty || _country == null || !Ui.IsShown(Root))
+                return;
+            // Never rebuild while a mouse button is down: that would swap the button being
+            // clicked (or the slider being dragged) for a new one, and the click would be lost.
+            if (GameInput.PointerHeld(PointerButton.Left) || GameInput.PointerHeld(PointerButton.Right) ||
+                GameInput.PointerHeld(PointerButton.Middle))
+                return;
+            if (_hovered && Time.unscaledTime - _lastRebuild < HoveredRebuildSeconds)
+                return;
+            Rebuild();
         }
 
         /// <summary>A policy changed: update the live numbers without rebuilding the sliders.</summary>
@@ -178,6 +193,7 @@ namespace GrandStrategy.Game.UI
         void Rebuild()
         {
             _dirty = false;
+            _lastRebuild = Time.unscaledTime;
             if (_country == null || Sim == null)
                 return;
 
@@ -485,9 +501,6 @@ namespace GrandStrategy.Game.UI
                 ShowValue(v);
                 RefreshLive();
             });
-            slider.RegisterCallback<PointerDownEvent>(_ => _dragging = true, TrickleDown.TrickleDown);
-            slider.RegisterCallback<PointerUpEvent>(_ => _dragging = false, TrickleDown.TrickleDown);
-            slider.RegisterCallback<PointerCaptureOutEvent>(_ => _dragging = false);
             box.Add(slider);
             _tips.Attach(head, label, help);
             return box;

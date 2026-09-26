@@ -31,7 +31,7 @@ namespace GrandStrategy.Game.UI
             Root.style.width = 340;
             Root.style.maxHeight = 460;
 
-            var header = Ui.Element("gs-panel__header", true);
+            var header = Ui.Header();
             header.style.paddingTop = 6;
             header.style.paddingBottom = 6;
             header.Add(Ui.IconElement("news", 18));

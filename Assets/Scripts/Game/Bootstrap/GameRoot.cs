@@ -41,6 +41,7 @@ namespace GrandStrategy.Game
 
         readonly List<IDisposable> _subscriptions = new List<IDisposable>();
         int _hoverId = -1;
+        bool _autoPaused; // the game paused itself (event, popup, battle) and resumes afterwards
 
         public WorldState World { get; private set; }
         public GameSimulation Sim { get; private set; }
@@ -210,10 +211,19 @@ namespace GrandStrategy.Game
 
             HandleHotkeys();
 
-            if (!CanRunTime && !World.Clock.IsPaused)
-                World.Clock.SetPaused(true); // events and battles stop the clock
-            if (CanRunTime)
+            if (!CanRunTime)
+            {
+                AutoPause(); // events, popups and battles stop the clock...
+            }
+            else
+            {
+                if (_autoPaused)
+                {
+                    _autoPaused = false; // ...and it runs again once they are dealt with
+                    World.Clock.SetPaused(false);
+                }
                 World.Clock.Advance(Time.unscaledDeltaTime);
+            }
 
             HandleMapPointer();
         }
@@ -340,10 +350,20 @@ namespace GrandStrategy.Game
             Audio.Play(Sfx.UiClick);
         }
 
+        /// <summary>Pauses on the game's own account; time resumes by itself when it can run again.</summary>
+        void AutoPause()
+        {
+            if (World.Clock.IsPaused)
+                return;
+            World.Clock.SetPaused(true);
+            _autoPaused = Phase == GamePhase.Playing;
+        }
+
         public void TogglePause()
         {
             if (Phase != GamePhase.Playing || !CanRunTime && World.Clock.IsPaused)
                 return;
+            _autoPaused = false;
             World.Clock.TogglePause();
             Audio.Play(World.Clock.IsPaused ? Sfx.Pause : Sfx.Resume);
         }
@@ -415,7 +435,10 @@ namespace GrandStrategy.Game
         {
             Phase = phase;
             if (phase != GamePhase.Playing)
+            {
+                _autoPaused = false;
                 World?.Clock.SetPaused(true);
+            }
             Hud.OnPhaseChanged();
         }
 
@@ -423,7 +446,7 @@ namespace GrandStrategy.Game
 
         void OnNationalEvent(NationalEventRaised e)
         {
-            World.Clock.SetPaused(true);
+            AutoPause();
             Hud.ShowEvent(e.Event);
         }
 
@@ -482,6 +505,28 @@ namespace GrandStrategy.Game
         }
 
         // ------------------------------------------------------------------ developer tools
+
+        public bool SelfTestRunning { get; private set; }
+
+        /// <summary>Plays through every screen and action and shows a report (developer panel).</summary>
+        public void RunSelfTest()
+        {
+            if (SelfTestRunning || World == null || Map == null || Phase == GamePhase.Loading || Phase == GamePhase.Error)
+                return;
+            if (Phase == GamePhase.GameOver)
+            {
+                Hud.Toast("Self-test", "Start a new game first.", Ui.Warn);
+                return;
+            }
+            StartCoroutine(SelfTestRoutine());
+        }
+
+        IEnumerator SelfTestRoutine()
+        {
+            SelfTestRunning = true;
+            yield return new SelfTest(this).Run();
+            SelfTestRunning = false;
+        }
 
         public void DevTrigger(string what)
         {

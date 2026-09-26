@@ -181,7 +181,8 @@ Assets/
       Core/       GameSimulation (monthly tick), Breakdown/Factor, NationSetup
       Economy/ Politics/ Diplomacy/ Events/
     Game/         Unity layer: bootstrap, map rendering, camera, input, UI, audio.
-  Resources/      UI stylesheet (UI/Game.uss), flags, icons, fonts, optional audio overrides.
+  Resources/      UI stylesheet (UI/Game.uss, colours only), fonts, optional audio overrides.
+  StreamingAssets/UI/  Flags and icons as plain PNGs, decoded by the game at runtime.
   StreamingAssets/Data/
     Map/          provinces.png (province ID map), provinces.json, countries.json
     World/        nations.json, diplomacy.json (starting economy, politics, blocs)
@@ -216,6 +217,8 @@ Tests/            .NET test project for the simulation
 * **UI** is UI Toolkit, built in code and styled by `Resources/UI/Game.uss`.
   * Views: `TopBar`, `CountryPanel` (tabs), `EventPopup`, `NotificationLog`, `TooltipManager`, and screens for loading, settings, game over and the F12 developer panel.
   * Hover tooltips are custom, because UI Toolkit shows none at runtime.
+  * **Images don't go through Unity's texture importer.** Flags and icons are PNGs in `StreamingAssets/UI`, decoded with `Texture2D.LoadImage` (as the map is). Panel gradients and the vignette are generated in code. The stylesheet references no images. This keeps the interface identical on every machine, whatever the import settings.
+  * **Self-test (F12).** `SelfTest.cs` plays through every screen and action: all tabs, all map modes, every tooltip, economy changes, decisions, diplomacy, events, 24 months of time and the Capital Battle rules. It reports failed checks and every error logged along the way.
 * **No hand-made scenes needed yet.** `GameBootstrap` builds the game when you
   press Play in any scene.
 

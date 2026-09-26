@@ -73,6 +73,7 @@ namespace GrandStrategy.Game.UI
 
         public static TooltipContent Opinion(ActionPreview p, string country)
         {
+            if (p?.Opinion == null) return null;
             var t = new TooltipContent(p.WillAccept ? $"{country} will accept" : $"{country} will refuse",
                 "Their reasons (the total must be 0 or more):");
             foreach (var f in p.Opinion.Factors.Where(f => System.Math.Abs(f.Value) >= 0.5))

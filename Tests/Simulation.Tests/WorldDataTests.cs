@@ -103,6 +103,36 @@ namespace GrandStrategy.Simulation.Tests
             }
         }
 
+        [Fact]
+        public void EveryCountryHasAFlagAndIconsAreValidPngs()
+        {
+            string ui = Path.Combine(FindRepoRoot(), "Assets", "StreamingAssets", "UI");
+            var noFlag = Files.Value.countries.countries
+                .Where(c => !File.Exists(Path.Combine(ui, "Flags", c.tag + ".png")))
+                .Select(c => c.tag).ToList();
+            Assert.True(noFlag.Count == 0, "No flag for: " + string.Join(", ", noFlag));
+
+            var icons = Directory.GetFiles(Path.Combine(ui, "Icons"), "*.png");
+            Assert.True(icons.Length >= 40, $"Only {icons.Length} icons");
+            foreach (var file in icons.Concat(Directory.GetFiles(Path.Combine(ui, "Flags"), "*.png")))
+            {
+                var (width, height) = PngSize(file);
+                bool isIcon = file.Contains(Path.DirectorySeparatorChar + "Icons" + Path.DirectorySeparatorChar);
+                Assert.True(isIcon ? width == 64 && height == 64 : width == 128 && height == 96,
+                    $"{Path.GetFileName(file)} is {width}x{height}");
+            }
+        }
+
+        /// <summary>Reads the size from a PNG header (and fails if the file is not a PNG).</summary>
+        static (int width, int height) PngSize(string path)
+        {
+            var b = new byte[24];
+            using (var f = File.OpenRead(path))
+                Assert.Equal(24, f.Read(b, 0, 24));
+            Assert.True(b[1] == 'P' && b[2] == 'N' && b[3] == 'G', $"{path} is not a PNG");
+            return ((b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19], (b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23]);
+        }
+
         [Theory]
         [InlineData("USA", "Washington, D.C.")]
         [InlineData("CHN", "Beijing")]

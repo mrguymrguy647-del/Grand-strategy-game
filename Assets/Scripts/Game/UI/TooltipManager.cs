@@ -50,6 +50,7 @@ namespace GrandStrategy.Game.UI
     {
         readonly VisualElement _root;
         readonly VisualElement _box;
+        readonly Dictionary<VisualElement, Func<TooltipContent>> _providers = new Dictionary<VisualElement, Func<TooltipContent>>();
         VisualElement _owner;
 
         public TooltipManager(VisualElement root)
@@ -64,6 +65,7 @@ namespace GrandStrategy.Game.UI
         {
             if (target.pickingMode == PickingMode.Ignore)
                 target.pickingMode = PickingMode.Position;
+            _providers[target] = content;
             target.RegisterCallback<PointerEnterEvent>(e =>
             {
                 _owner = target;
@@ -82,9 +84,45 @@ namespace GrandStrategy.Game.UI
             });
             target.RegisterCallback<DetachFromPanelEvent>(_ =>
             {
+                _providers.Remove(target);
                 if (_owner == target)
                     Hide();
             });
+        }
+
+        /// <summary>
+        /// Self-test: builds every tooltip currently on screen under <paramref name="under"/>,
+        /// as if the pointer had visited each one. Returns how many were built.
+        /// </summary>
+        public int BuildAllForTest(VisualElement under, List<string> errors)
+        {
+            int built = 0;
+            foreach (var kv in new List<KeyValuePair<VisualElement, Func<TooltipContent>>>(_providers))
+            {
+                var element = kv.Key;
+                if (element.panel == null || !IsInside(element, under))
+                    continue;
+                try
+                {
+                    Build(kv.Value?.Invoke());
+                    built++;
+                }
+                catch (Exception e)
+                {
+                    var label = element as TextElement ?? element.Q<TextElement>();
+                    errors.Add($"Tooltip on \"{label?.text}\": {e.GetType().Name}: {e.Message}");
+                }
+            }
+            Hide();
+            return built;
+        }
+
+        static bool IsInside(VisualElement e, VisualElement root)
+        {
+            for (var p = e; p != null; p = p.parent)
+                if (p == root)
+                    return true;
+            return false;
         }
 
         public void Attach(VisualElement target, string title, string text) => Attach(target, () => new TooltipContent(title, text));

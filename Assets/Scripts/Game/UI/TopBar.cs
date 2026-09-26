@@ -20,6 +20,7 @@ namespace GrandStrategy.Game.UI
         readonly Button _pause;
         readonly VisualElement[] _pips = new VisualElement[GameClock.MaxSpeed];
         string _shownDate;
+        string _flagTag;
         int _shownSpeed = -1;
         bool? _shownPaused;
 
@@ -29,6 +30,7 @@ namespace GrandStrategy.Game.UI
         {
             _game = game;
             Root = Ui.Element("gs-topbar", true);
+            Root.style.backgroundImage = new StyleBackground(Ui.Gradient(new Color32(30, 39, 55, 250), new Color32(12, 16, 24, 250)));
 
             _flag = Ui.FlagElement(null);
             _flag.style.marginRight = 10;
@@ -141,18 +143,22 @@ namespace GrandStrategy.Game.UI
             var p = world.Player;
             bool show = p != null && _game.Phase != GamePhase.NationSelect && p.Economy != null;
             Ui.Show(_chips, show);
+            Ui.Show(_flag, show);
             if (!show)
             {
                 _name.text = "Choose your nation";
                 _government.text = "Click any country on the map";
-                Ui.SetFlag(_flag, null);
-                _flag.style.backgroundColor = new Color(0.25f, 0.25f, 0.28f);
+                _flagTag = null;
                 return;
             }
 
             _name.text = p.Name;
             _government.text = p.Politics.Government.DisplayName();
-            Ui.SetFlag(_flag, p.Tag);
+            if (_flagTag != p.Tag)
+            {
+                _flagTag = p.Tag;
+                Ui.SetFlag(_flag, p.Tag);
+            }
 
             var e = p.Economy;
             _treasury.text = Ui.FormatMoneyMillions(e.Treasury);

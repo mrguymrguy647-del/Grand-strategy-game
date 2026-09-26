@@ -122,7 +122,7 @@ namespace GrandStrategy.Game.UI
             Root = Ui.Element("gs-backdrop", true);
             var panel = Ui.Panel();
             panel.style.width = 500;
-            var header = Ui.Element("gs-panel__header", true);
+            var header = Ui.Header();
             header.Add(Ui.IconElement("settings", 26));
             var t = Ui.Title("Settings", 26);
             t.style.marginLeft = 10;
@@ -281,7 +281,7 @@ namespace GrandStrategy.Game.UI
             Root = Ui.Panel();
             Ui.Absolute(Root, null, null, 12, 70);
             Root.style.width = 360;
-            var header = Ui.Element("gs-panel__header", true);
+            var header = Ui.Header();
             header.Add(Ui.Title("Developer tools (F12)", 20));
             Root.Add(header);
             _body = Ui.Element("gs-panel__body");
@@ -297,9 +297,20 @@ namespace GrandStrategy.Game.UI
             Ui.Show(Root, show);
         }
 
+        public void RefreshIfShown()
+        {
+            if (Ui.IsShown(Root))
+                Rebuild();
+        }
+
         void Rebuild()
         {
             _body.Clear();
+            var selfTest = Ui.Button("Run self-test", () => _game.RunSelfTest(), true, 15, "trophy");
+            selfTest.style.marginBottom = 8;
+            _body.Add(selfTest);
+            _body.Add(Ui.Label("Plays through every screen and action (about 30 seconds) and reports anything that breaks. Starts a new game afterwards.", 13, Ui.TextDim));
+            _body.Add(Ui.SectionTitle("Events and cheats"));
             _body.Add(Ui.Label("Shortcuts for testing. Not part of normal play.", 13, Ui.TextDim));
             var row = Ui.Row();
             row.style.flexWrap = Wrap.Wrap;

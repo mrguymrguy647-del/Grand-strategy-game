@@ -76,6 +76,18 @@ namespace GrandStrategy.Simulation.Tests
         }
 
         [Fact]
+        public void PausingDuringAnAdvanceStopsAtThatDay()
+        {
+            var clock = new GameClock(new GameDate(2026, 1, 28));
+            clock.SetSpeed(5);
+            clock.SetPaused(false);
+            clock.MonthPassed += _ => clock.SetPaused(true); // e.g. an event pops up on the 1st
+            clock.Advance(10.0);
+            Assert.True(clock.IsPaused);
+            Assert.Equal(new GameDate(2026, 2, 1), clock.Date);
+        }
+
+        [Fact]
         public void StateChangedFiresOnlyOnRealChanges()
         {
             var clock = new GameClock(new GameDate(2026, 1, 1));

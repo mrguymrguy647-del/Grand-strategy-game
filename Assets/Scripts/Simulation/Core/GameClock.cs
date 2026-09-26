@@ -46,7 +46,9 @@ namespace GrandStrategy.Simulation
             _accumulator += realSeconds;
             double perDay = SecondsPerDay[Speed];
             int days = 0;
-            while (_accumulator >= perDay && days < MaxDaysPerAdvance)
+            // Stop as soon as something pauses the clock mid-advance (an event raised on a
+            // month boundary must not let further days slip by in the same frame).
+            while (!IsPaused && _accumulator >= perDay && days < MaxDaysPerAdvance)
             {
                 _accumulator -= perDay;
                 StepDay();

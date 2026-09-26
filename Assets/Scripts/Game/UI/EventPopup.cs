@@ -17,9 +17,13 @@ namespace GrandStrategy.Game.UI
         readonly VisualElement _backdrop;
         readonly VisualElement _panel;
         readonly Queue<Action> _queue = new Queue<Action>();
+        NationalEvent _event; // the event on screen, or null for a message
 
         public VisualElement Root => _backdrop;
         public bool IsOpen { get; private set; }
+
+        /// <summary>True while a message (not a decision) is on screen: Esc may close it.</summary>
+        public bool ShowingMessage => IsOpen && _event == null;
 
         public EventPopup(GameRoot game, TooltipManager tips)
         {
@@ -37,6 +41,18 @@ namespace GrandStrategy.Game.UI
         public void ShowEvent(NationalEvent evt)
         {
             Enqueue(() => BuildEvent(evt));
+        }
+
+        /// <summary>Queues a popup whose body is built by the caller (it must add its own buttons).</summary>
+        public void ShowCustom(string icon, string title, Action<VisualElement> buildBody)
+        {
+            Enqueue(() =>
+            {
+                _panel.Add(Header(icon, title));
+                var body = Ui.Element("gs-panel__body");
+                buildBody(body);
+                _panel.Add(body);
+            });
         }
 
         /// <summary>Queues a message with an OK button and optional reasons.</summary>
@@ -58,6 +74,7 @@ namespace GrandStrategy.Game.UI
         void Open(Action build)
         {
             IsOpen = true;
+            _event = null;
             _panel.Clear();
             build();
             Ui.Show(_backdrop, true);
@@ -74,12 +91,39 @@ namespace GrandStrategy.Game.UI
                 return;
             }
             IsOpen = false;
+            _event = null;
             Ui.Show(_backdrop, false);
+        }
+
+        /// <summary>Closes the message on screen (Esc). Events must be answered, so they stay.</summary>
+        public bool CloseMessage()
+        {
+            if (!ShowingMessage)
+                return false;
+            Close();
+            return true;
+        }
+
+        /// <summary>Self-test: answers the popup on screen as a player would (first option, or OK).</summary>
+        public void AnswerForTest()
+        {
+            if (!IsOpen)
+                return;
+            if (_event != null)
+                Choose(_event, 0);
+            else
+                Close();
+        }
+
+        void Choose(NationalEvent evt, int index)
+        {
+            _game.ResolveEvent(evt, index);
+            Close();
         }
 
         VisualElement Header(string icon, string title, Color? iconColor = null)
         {
-            var header = Ui.Element("gs-panel__header", true);
+            var header = Ui.Header();
             var i = Ui.IconElement(icon ?? "news", 44, iconColor, "gs-icon--large");
             i.style.marginRight = 14;
             header.Add(i);
@@ -91,6 +135,7 @@ namespace GrandStrategy.Game.UI
 
         void BuildEvent(NationalEvent evt)
         {
+            _event = evt;
             _panel.Add(Header(evt.Icon, evt.Title));
             var body = Ui.Element("gs-panel__body");
             if (evt.Other != null)
@@ -116,9 +161,10 @@ namespace GrandStrategy.Game.UI
                     box.Add(Ui.Label(option.Effects, 13, Ui.Gold));
                 box.RegisterCallback<ClickEvent>(_ =>
                 {
+                    if (_event != evt)
+                        return; // a second click on an option that is already closing
                     Ui.Audio?.Play(Audio.Sfx.UiClick);
-                    _game.ResolveEvent(evt, index);
-                    Close();
+                    Choose(evt, index);
                 });
                 box.RegisterCallback<PointerEnterEvent>(_ => Ui.Audio?.Play(Audio.Sfx.UiHover));
                 body.Add(box);

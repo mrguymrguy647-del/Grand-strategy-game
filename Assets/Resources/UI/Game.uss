@@ -1,6 +1,7 @@
 /* Grand Strategy - interface theme.
    Dark steel panels with gold trim. Loaded by HudController from Resources/UI/Game.
-   Fonts are applied from code (Ui.cs) so they work with any UI Toolkit theme. */
+   Fonts, panel gradients, icons and flags are applied from code (Ui.cs), so this sheet
+   references no image files: it only uses colours. */
 
 /* ---------------------------------------------------------------- base */
 
@@ -92,16 +93,14 @@
 /* ---------------------------------------------------------------- panels */
 
 .gs-panel {
-    background-image: resource("UI/Textures/panel");
-    -unity-background-scale-mode: stretch-to-fill;
+    background-color: rgba(14, 19, 28, 0.96);
     border-width: 1px;
     border-color: rgba(214, 176, 98, 0.38);
     border-radius: 6px;
 }
 
 .gs-panel__header {
-    background-image: resource("UI/Textures/header");
-    -unity-background-scale-mode: stretch-to-fill;
+    background-color: rgb(32, 41, 57);
     flex-direction: row;
     align-items: center;
     padding: 10px 14px;
@@ -138,9 +137,8 @@
 /* ---------------------------------------------------------------- buttons */
 
 .gs-btn {
-    background-image: resource("UI/Textures/button");
-    -unity-background-scale-mode: stretch-to-fill;
-    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    background-color: rgb(40, 49, 65);
     border-width: 1px;
     border-color: rgba(255, 255, 255, 0.14);
     border-radius: 4px;
@@ -153,11 +151,12 @@
 }
 
 .gs-btn:hover {
-    background-image: resource("UI/Textures/button_hover");
+    background-color: rgb(56, 67, 87);
     border-color: rgba(226, 188, 104, 0.75);
 }
 
 .gs-btn:active {
+    background-color: rgb(30, 37, 50);
     border-color: rgb(255, 222, 150);
 }
 
@@ -166,14 +165,18 @@
 }
 
 .gs-btn--primary {
-    background-image: resource("UI/Textures/button_primary");
+    background-color: rgb(206, 164, 78);
     border-color: rgb(240, 206, 128);
     color: rgb(28, 22, 10);
 }
 
 .gs-btn--primary:hover {
-    background-image: resource("UI/Textures/button_primary_hover");
+    background-color: rgb(228, 190, 108);
     border-color: rgb(255, 230, 170);
+}
+
+.gs-btn--primary:active {
+    background-color: rgb(180, 140, 62);
 }
 
 .gs-btn--icon {
@@ -186,7 +189,7 @@
 
 .gs-btn--active {
     border-color: rgb(226, 188, 104);
-    background-image: resource("UI/Textures/button_hover");
+    background-color: rgb(74, 64, 38);
 }
 
 /* ---------------------------------------------------------------- top bar */
@@ -201,8 +204,7 @@
     align-items: center;
     padding-left: 12px;
     padding-right: 12px;
-    background-image: resource("UI/Textures/topbar");
-    -unity-background-scale-mode: stretch-to-fill;
+    background-color: rgba(14, 19, 28, 0.97);
     border-bottom-width: 2px;
     border-bottom-color: rgba(214, 176, 98, 0.55);
 }
@@ -409,8 +411,7 @@
 }
 
 .gs-option {
-    background-image: resource("UI/Textures/button");
-    -unity-background-scale-mode: stretch-to-fill;
+    background-color: rgb(36, 45, 60);
     border-width: 1px;
     border-color: rgba(255, 255, 255, 0.14);
     border-radius: 5px;
@@ -421,7 +422,7 @@
 }
 
 .gs-option:hover {
-    background-image: resource("UI/Textures/button_hover");
+    background-color: rgb(52, 63, 82);
     border-color: rgba(226, 188, 104, 0.8);
 }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using GrandStrategy.Game.Audio;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -10,7 +11,8 @@ namespace GrandStrategy.Game.UI
     /// <summary>
     /// Builders and shared resources for the code-built UI Toolkit interface.
     /// Look and feel lives in Resources/UI/Game.uss (classes prefixed "gs-"); this class adds
-    /// fonts, icons and flags, which are loaded from Resources.
+    /// fonts (Resources/Fonts), icons and flags (StreamingAssets/UI, decoded at runtime so they
+    /// never depend on Unity's texture import settings) and generated gradients.
     /// </summary>
     public static class Ui
     {
@@ -30,8 +32,13 @@ namespace GrandStrategy.Game.UI
         // ------------------------------------------------------------------ resources
 
         static Font _regular, _medium, _semiBold, _bold, _title;
-        static readonly Dictionary<string, Texture2D> Icons = new Dictionary<string, Texture2D>();
-        static readonly Dictionary<string, Texture2D> Flags = new Dictionary<string, Texture2D>();
+        static readonly Dictionary<string, Texture2D> Images = new Dictionary<string, Texture2D>();
+        static readonly HashSet<string> Missing = new HashSet<string>();
+        static readonly Dictionary<string, Texture2D> Gradients = new Dictionary<string, Texture2D>();
+        static Texture2D _vignette;
+
+        /// <summary>Images that were asked for but could not be loaded ("Icons/name", "Flags/TAG").</summary>
+        public static IReadOnlyCollection<string> MissingImages => Missing;
 
         public enum Weight
         {
@@ -68,29 +75,115 @@ namespace GrandStrategy.Game.UI
                 e.style.unityFontDefinition = FontDefinition.FromFont(font);
         }
 
-        public static Texture2D Icon(string name)
+        public static Texture2D Icon(string name) => string.IsNullOrEmpty(name) ? null : Image("Icons", name);
+
+        public static Texture2D Flag(string tag) => string.IsNullOrEmpty(tag) ? null : Image("Flags", tag);
+
+        /// <summary>Folder that holds the interface images (icons, flags).</summary>
+        public static string ImageRoot => Path.Combine(Application.streamingAssetsPath, "UI");
+
+        /// <summary>Loads StreamingAssets/UI/&lt;folder&gt;/&lt;name&gt;.png once and caches it (null if missing).</summary>
+        static Texture2D Image(string folder, string name)
         {
-            if (string.IsNullOrEmpty(name))
+            string key = folder + "/" + name;
+            // "!= null" is Unity's check: after leaving play mode without a domain reload the
+            // cached textures are destroyed and must be loaded again.
+            if (Images.TryGetValue(key, out var cached) && cached != null)
+                return cached;
+            if (Missing.Contains(key))
                 return null;
-            if (!Icons.TryGetValue(name, out var tex))
+
+            Texture2D tex = null;
+            string path = Path.Combine(ImageRoot, folder, name + ".png");
+            try
             {
-                tex = Resources.Load<Texture2D>("Icons/" + name);
-                Icons[name] = tex;
+                if (File.Exists(path))
+                {
+                    tex = new Texture2D(2, 2, TextureFormat.RGBA32, true)
+                    {
+                        name = key,
+                        wrapMode = TextureWrapMode.Clamp,
+                        filterMode = FilterMode.Trilinear,
+                    };
+                    if (tex.LoadImage(File.ReadAllBytes(path), false))
+                    {
+                        // Build the smaller mip levels explicitly (icons and flags are drawn well
+                        // below their file size), then free the CPU copy.
+                        tex.Apply(true, true);
+                    }
+                    else
+                    {
+                        UnityEngine.Object.Destroy(tex);
+                        tex = null;
+                    }
+                }
             }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Could not load {path}: {e.Message}");
+                tex = null;
+            }
+            if (tex == null)
+            {
+                Missing.Add(key);
+                Debug.LogWarning($"Missing interface image: {path}");
+                return null;
+            }
+            Images[key] = tex;
             return tex;
         }
 
-        public static Texture2D Flag(string tag)
+        /// <summary>A vertical gradient texture (generated, cached) for panel backgrounds.</summary>
+        public static Texture2D Gradient(Color top, Color bottom)
         {
-            if (string.IsNullOrEmpty(tag))
-                return null;
-            if (!Flags.TryGetValue(tag, out var tex))
+            string key = ColorUtility.ToHtmlStringRGBA(top) + ColorUtility.ToHtmlStringRGBA(bottom);
+            if (Gradients.TryGetValue(key, out var tex) && tex != null)
+                return tex;
+            const int h = 64;
+            tex = new Texture2D(1, h, TextureFormat.RGBA32, false)
             {
-                tex = Resources.Load<Texture2D>("Flags/" + tag);
-                Flags[tag] = tex;
-            }
+                name = "Gradient",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            for (int y = 0; y < h; y++)
+                tex.SetPixel(0, y, Color.Lerp(bottom, top, y / (h - 1f))); // texture rows start at the bottom
+            tex.Apply(false, true);
+            Gradients[key] = tex;
             return tex;
         }
+
+        /// <summary>Soft dark edges over the map (generated once).</summary>
+        public static Texture2D Vignette()
+        {
+            if (_vignette != null)
+                return _vignette;
+            const int w = 128, h = 72;
+            _vignette = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            {
+                name = "Vignette",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var pixels = new Color32[w * h];
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float dx = (x + 0.5f) / w * 2f - 1f;
+                float dy = (y + 0.5f) / h * 2f - 1f;
+                float d = Mathf.Sqrt(dx * dx * 0.8f + dy * dy * 1.1f);
+                float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.75f, 1.45f, d)) * 0.55f;
+                pixels[y * w + x] = new Color32(2, 5, 10, (byte)(a * 255));
+            }
+            _vignette.SetPixels32(pixels);
+            _vignette.Apply(false, true);
+            return _vignette;
+        }
+
+        public static readonly Color PanelTop = new Color32(24, 32, 46, 246);
+        public static readonly Color PanelBottom = new Color32(11, 15, 23, 246);
+        public static readonly Color HeaderTop = new Color32(44, 54, 72, 255);
+        public static readonly Color HeaderBottom = new Color32(24, 31, 44, 255);
 
         // ------------------------------------------------------------------ elements
 
@@ -130,6 +223,15 @@ namespace GrandStrategy.Game.UI
         public static VisualElement Panel(string extraClass = null)
         {
             var e = Element("gs-panel" + (extraClass == null ? "" : " " + extraClass), true);
+            e.style.backgroundImage = new StyleBackground(Gradient(PanelTop, PanelBottom));
+            return e;
+        }
+
+        /// <summary>The title strip at the top of a panel.</summary>
+        public static VisualElement Header()
+        {
+            var e = Element("gs-panel__header", true);
+            e.style.backgroundImage = new StyleBackground(Gradient(HeaderTop, HeaderBottom));
             return e;
         }
 
@@ -175,18 +277,16 @@ namespace GrandStrategy.Game.UI
         public static VisualElement FlagElement(string tag, string sizeClass = null)
         {
             var e = Element("gs-flag" + (sizeClass == null ? "" : " " + sizeClass));
-            var tex = Flag(tag);
-            if (tex != null)
-                e.style.backgroundImage = new StyleBackground(tex);
-            else
-                e.style.backgroundColor = new Color(0.3f, 0.3f, 0.3f);
+            SetFlag(e, tag);
             return e;
         }
 
+        /// <summary>Shows a country's flag on an element (a plain dark box if the flag is missing).</summary>
         public static void SetFlag(VisualElement e, string tag)
         {
             var tex = Flag(tag);
             e.style.backgroundImage = tex != null ? new StyleBackground(tex) : new StyleBackground(StyleKeyword.None);
+            e.style.backgroundColor = tex != null ? new StyleColor(StyleKeyword.Null) : new StyleColor(new Color(0.22f, 0.24f, 0.28f));
         }
 
         public static Button Button(string text, Action onClick, bool primary = false, int fontSize = 15, string icon = null)

@@ -69,6 +69,8 @@ What you can do today:
 
 ## If something goes wrong
 
+- **Self-test:** press `F12` and click **Run self-test**. It plays through every screen and action in about 30 seconds, then shows a report. If anything failed, click **Copy report** and send it. Click **New game** afterwards, because the test changes the world.
+
 - A red box appears at the bottom of the game window whenever an error happens. Click **Copy errors** and paste the text to your developer. It includes your Unity version and graphics card.
 - **Settings** (top right) shows which map renderer and input system are in use.
 - If the menu bar has no **Grand Strategy** item, or nothing responds to the mouse, check Unity's **Console** window for red errors and send those too.
@@ -84,7 +86,7 @@ What you can do today:
 | Game speed | `1`–`5`, or `+` / `-` |
 | Map modes | `F1` Political, `F2` Diplomatic, `F3` Wealth, `F4` Growth, `F5` Stability, `F6` Government, `F7` Population |
 | Explain a number | Hover over it |
-| Developer tools (test events, Capital Battle) | `F12` |
+| Developer tools (self-test, test events, Capital Battle) | `F12` |
 | Mute | `M` |
 
 ## Project layout
@@ -95,10 +97,11 @@ Assets/
     Economy/ Politics/ Diplomacy/ Events/   The Phase 1 nation systems
     Core/GameSimulation.cs                  Runs them every in-game month
   Scripts/Game/         Unity side: bootstrap, map, camera, input, UI, audio
-  Scripts/Editor/       Editor-only setup (main scene, UI texture import settings)
+  Scripts/Editor/       Editor-only setup (creates the main scene)
   Resources/Shaders/    WorldMap shader (terrain, colours, borders, selection)
-  Resources/UI/         Game.uss stylesheet, runtime theme, panel textures
-  Resources/Flags|Icons|Fonts/   Interface art (see Credits)
+  Resources/UI/         Game.uss stylesheet (colours only) and runtime theme
+  Resources/Fonts/      Barlow fonts
+  StreamingAssets/UI/   Flags/ and Icons/ (PNG files the game decodes itself; see Credits)
   StreamingAssets/Data/ Map/ (provinces, countries), World/ (nations, diplomacy), Rules/ (tuning)
 docs/DESIGN.md          Game design
 Tests/                  .NET unit tests
@@ -139,7 +142,7 @@ python3 Tools/mapgen/generate_map.py       # provinces.png, provinces.json, coun
 python3 Tools/mapgen/generate_terrain.py   # terrain.jpg (relief, water, lakes, rivers)
 python3 Tools/mapgen/generate_nations.py   # nations.json, diplomacy.json (economy, government, blocs, sanctions)
 pip install cairosvg pillow numpy
-python3 Tools/assets/fetch_ui_assets.py    # flags, icons, fonts, panel textures
+python3 Tools/assets/fetch_ui_assets.py    # flags, icons, fonts
 python3 Tools/unity_meta.py
 ```
 

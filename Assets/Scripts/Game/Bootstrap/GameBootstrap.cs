@@ -1,3 +1,4 @@
+using System.Globalization;
 using UnityEngine;
 
 namespace GrandStrategy.Game
@@ -11,6 +12,12 @@ namespace GrandStrategy.Game
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
+            // Numbers are shown as "45.5%" whatever the player's Windows region is set to
+            // (and the game's fonts don't have every region's digit and separator glyphs).
+            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
             ErrorConsole.Ensure();
             if (Object.FindAnyObjectByType<GameRoot>() != null)
                 return;
