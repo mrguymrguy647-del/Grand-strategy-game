@@ -7,6 +7,7 @@ using GrandStrategy.Game.UI;
 using GrandStrategy.Simulation;
 using GrandStrategy.Simulation.Data;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace GrandStrategy.Game
 {
@@ -51,6 +52,12 @@ namespace GrandStrategy.Game
 
         IEnumerator Start()
         {
+            ErrorConsole.Ensure();
+            var pipeline = GraphicsSettings.currentRenderPipeline;
+            Debug.Log($"Grand Strategy starting: Unity {Application.unityVersion}, {SystemInfo.graphicsDeviceType} " +
+                      $"(shader level {SystemInfo.graphicsShaderLevel}), input: {GameInput.BackendName}, " +
+                      $"render pipeline: {(pipeline == null ? "Built-in" : pipeline.name)}, colour space: {QualitySettings.activeColorSpace}");
+
             Audio = new GameObject("Audio").AddComponent<AudioManager>();
             Audio.transform.SetParent(transform, false);
             Ui.Audio = Audio;
@@ -83,21 +90,24 @@ namespace GrandStrategy.Game
             Hud.ShowLoading($"Drawing {World.ProvinceCount} provinces of {World.Countries.Count} nations...");
             yield return null;
 
-            Map = new GameObject("World Map").AddComponent<MapView>();
-            Map.transform.SetParent(transform, false);
-            Map.Initialize(World, assets);
-            Map.ModeChanged += _ => Hud.RefreshModeButtons();
+            try
+            {
+                BuildMap(assets, cam);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                SetPhase(GamePhase.Error);
+                Hud.ShowError("Could not draw the map.\n" + e.Message);
+                yield break;
+            }
 
-            var markers = new GameObject("Capitals").AddComponent<CapitalMarkers>();
-            markers.transform.SetParent(transform, false);
-            markers.Initialize(World, Map, cam);
-
-            CameraController = cam.gameObject.GetComponent<MapCameraController>();
-            if (CameraController == null)
-                CameraController = cam.gameObject.AddComponent<MapCameraController>();
-            CameraController.Initialize(cam, Map.WorldRect, Hud.IsPointerOverUI);
-
-            World.Clock.MonthPassed += _ => Audio.Play(Sfx.NewMonth, 0.8f);
+            // The monthly chime would be every half second at the top speeds.
+            World.Clock.MonthPassed += _ =>
+            {
+                if (World.Clock.Speed <= 3)
+                    Audio.Play(Sfx.NewMonth, 0.8f);
+            };
             World.Clock.YearPassed += OnYearPassed;
             _subscriptions.Add(World.Events.Subscribe<ProvinceOwnerChanged>(_ => _infoDirty = true));
             _subscriptions.Add(World.Events.Subscribe<ModifiersChanged>(_ => _infoDirty = true));
@@ -106,6 +116,28 @@ namespace GrandStrategy.Game
 
             Hud.HideLoading();
             SetPhase(GamePhase.NationSelect);
+        }
+
+        void BuildMap(MapAssets assets, Camera cam)
+        {
+            Map = new GameObject("World Map").AddComponent<MapView>();
+            Map.transform.SetParent(transform, false);
+            Map.Initialize(World, assets);
+            Map.ModeChanged += _ => Hud.RefreshModeButtons();
+            Debug.Log($"Map renderer: {(Map.UsesShader ? "shader" : "CPU fallback")}, {Map.Width}x{Map.Height} province map.");
+
+            var markers = new GameObject("Capitals").AddComponent<CapitalMarkers>();
+            markers.transform.SetParent(transform, false);
+            markers.Initialize(World, Map, cam);
+
+            var labels = new GameObject("Country Names").AddComponent<MapLabels>();
+            labels.transform.SetParent(transform, false);
+            labels.Initialize(World, Map, assets, cam, Hud.MapLabelLayer);
+
+            CameraController = cam.gameObject.GetComponent<MapCameraController>();
+            if (CameraController == null)
+                CameraController = cam.gameObject.AddComponent<MapCameraController>();
+            CameraController.Initialize(cam, Map.WorldRect, Hud.IsPointerOverUI);
         }
 
         void OnDestroy()
@@ -140,7 +172,8 @@ namespace GrandStrategy.Game
 
         void Update()
         {
-            if (World == null || Map == null)
+            if (World == null || Map == null || CameraController == null ||
+                Phase == GamePhase.Loading || Phase == GamePhase.Error)
                 return;
 
             HandleHotkeys();

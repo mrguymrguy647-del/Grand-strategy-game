@@ -42,6 +42,8 @@ namespace GrandStrategy.Game
     public static class GameInput
     {
 #if GS_INPUT_SYSTEM_PACKAGE && ENABLE_INPUT_SYSTEM
+        public const string BackendName = "Input System package";
+
         static Key[] KeysFor(GameKey key)
         {
             switch (key)
@@ -131,6 +133,8 @@ namespace GrandStrategy.Game
             }
         }
 #elif ENABLE_LEGACY_INPUT_MANAGER
+        public const string BackendName = "Input Manager (classic)";
+
         static KeyCode[] KeysFor(GameKey key)
         {
             switch (key)
@@ -190,7 +194,9 @@ namespace GrandStrategy.Game
         public static bool PointerHeld(PointerButton b) => Input.GetMouseButton((int)b);
         public static float ScrollSteps => Input.mouseScrollDelta.y;
 #else
-        // No input backend is enabled (Project Settings > Player > Active Input Handling).
+        // No usable input backend (Project Settings > Player > Active Input Handling).
+        public const string BackendName = "none - set Active Input Handling to 'Both' in Project Settings > Player";
+
         static bool _warned;
 
         static bool Warn()

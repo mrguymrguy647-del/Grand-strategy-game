@@ -6,7 +6,10 @@ The special feature is the **Capital Battle**. Most fighting is simple and happe
 
 ## Status: Milestone 1, the world map
 
-- A real-world map: **2,454 provinces** and **198 countries** built from Natural Earth borders.
+- A real-world map: **2,450 provinces** and **198 countries** built from Natural Earth borders.
+- **Real terrain** under the country colours: mountains, deserts, ice, rivers, lakes and coastal shallows.
+- **Smooth borders** drawn by a custom shader: thin province lines, bold country lines and a clean coastline.
+- **Country names on the map**, sized and angled to fit each country. Small countries appear as you zoom in.
 - Pan and zoom around the map, hover over and click provinces.
 - Pick any country and **play as it**.
 - A clock with **pause and 5 speeds**, starting 1 January 2026.
@@ -27,9 +30,15 @@ The special feature is the **Capital Battle**. Most fighting is simple and happe
 3. Clone this repository, or download it as a ZIP and unzip it.
 4. In Unity Hub go to **Projects → Add → Add project from disk** and choose the repository folder.
 5. Open the project. The first time, Unity takes a few minutes to set it up.
-6. Press **Play** ▶. You don't need a special scene; the game builds itself in whatever scene is open.
+6. If Unity asks whether to **enable the new Input System backends**, click **Yes**. Unity restarts once.
+7. The project opens in `Assets/Scenes/Main.unity`, which is created automatically. Press **Play** ▶.
+   The game also starts from any other scene.
 
-If Unity asks whether to enable the new Input System backends, either answer works: the game supports both.
+## If something goes wrong
+
+- A red box appears at the bottom of the game window whenever an error happens. Click **Copy errors** and paste the text to your developer. It includes your Unity version and graphics card.
+- **Settings** (top right) shows which map renderer and input system are in use.
+- If the menu bar has no **Grand Strategy** item, or nothing responds to the mouse, check Unity's **Console** window for red errors and send those too.
 
 ## Controls
 
@@ -49,6 +58,8 @@ If Unity asks whether to enable the new Input System backends, either answer wor
 Assets/
   Scripts/Simulation/   Game rules in pure C#, with no Unity code (tested outside Unity)
   Scripts/Game/         Unity side: bootstrap, map, camera, input, UI, audio
+  Scripts/Editor/       Editor-only setup (creates the main scene)
+  Resources/Shaders/    WorldMap shader (terrain, colours, borders)
   StreamingAssets/Data/ Map data (provinces.png / .json, countries.json) and rules (war.json)
   Resources/            UI theme, plus optional audio files to replace the generated ones
 docs/DESIGN.md          Game design
@@ -74,14 +85,15 @@ dotnet test Tests/Simulation.Tests   # dates, clock, world, Capital Battle rules
 dotnet test Tests/Audio.Tests        # every music loop and sound effect renders cleanly
 ```
 
-Rebuild the map data after changing the generator:
+Rebuild the map data after changing the generators:
 
 ```
 pip install -r Tools/mapgen/requirements.txt
-python3 Tools/mapgen/generate_map.py
+python3 Tools/mapgen/generate_map.py       # provinces.png, provinces.json, countries.json
+python3 Tools/mapgen/generate_terrain.py   # terrain.jpg (relief, water, lakes, rivers)
 python3 Tools/unity_meta.py
 ```
 
 ## Credits
 
-- Map data: [Natural Earth](https://www.naturalearthdata.com/), public domain. Borders and country assignments follow Natural Earth's defaults (with Palestine as its own country), and population and GDP figures are its estimates. Province populations are spread out from the country totals.
+- Map data and terrain relief: [Natural Earth](https://www.naturalearthdata.com/), public domain. The shaded-relief image comes from the `basemap-data` package on PyPI. Borders and country assignments follow Natural Earth's defaults (with Palestine as its own country), and population and GDP figures are its estimates. Province populations are spread out from the country totals.

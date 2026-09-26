@@ -66,7 +66,8 @@ namespace GrandStrategy.Game.Map
                     marker.sortingOrder = 30;
                     _markers.Add(country.Tag, marker);
                 }
-                marker.transform.position = _map.ProvinceCenter(country.CapitalProvinceId);
+                // Slightly towards the camera so it always draws over the map.
+                marker.transform.position = _map.ProvinceCenter(country.CapitalProvinceId) + new Vector3(0f, 0f, -0.01f);
                 marker.color = country.Tag == _world.PlayerTag ? PlayerColor
                     : country.HasModifier(CapitalBattleRules.DesperateModifierId) ? DesperateColor
                     : NormalColor;

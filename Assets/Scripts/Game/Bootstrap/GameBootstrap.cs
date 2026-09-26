@@ -11,6 +11,7 @@ namespace GrandStrategy.Game
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
+            ErrorConsole.Ensure();
             if (Object.FindAnyObjectByType<GameRoot>() != null)
                 return;
             new GameObject("Game").AddComponent<GameRoot>();

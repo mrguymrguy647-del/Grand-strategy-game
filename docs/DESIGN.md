@@ -106,8 +106,17 @@ Tests/            .NET test project for the simulation
   makes save/load and AI easier, and lets the Capital Battle scene be a separate
   module that receives a *battle setup* and returns a *battle result*.
 * **Province ID map.** Every province has a unique colour in
-  `provinces.png`. The game reads it once, builds a lookup table
-  (pixel → province), and renders map modes by recolouring.
+  `provinces.png`. The game reads it once into a pixel → province table
+  (used for clicks) and a 16-bit id texture for the GPU.
+* **Map rendering.** The `GrandStrategy/WorldMap` shader combines three textures:
+  the baked terrain (`terrain.jpg`: shaded relief, water depth, lakes, rivers), the
+  province id texture, and a tiny per-province colour table. Borders come from comparing
+  province ids over a 4x4 texel footprint with a tent filter, which gives smooth,
+  anti-aliased lines at a constant on-screen width. Changing ownership or map mode only
+  rewrites the colour table. A CPU renderer is kept as a fallback for old GPUs.
+* **Country names** are UI Toolkit labels placed on each country's largest connected
+  area, rotated along its main axis and sized to fit (principal-component analysis of
+  the province pixels), so they follow conquests automatically.
 * **Map data** is generated from [Natural Earth](https://www.naturalearthdata.com/)
   (public domain) admin-1 boundaries, projected with the Miller projection.
   Small subdivisions are merged into their regions for playability; micro-states

@@ -11,7 +11,7 @@ namespace GrandStrategy.Game.Map
     public sealed class MapCameraController : MonoBehaviour
     {
         const float DragThresholdPixels = 6f;
-        const float MinOrthoSize = 0.6f;
+        const float MinOrthoSize = 0.9f;
         const float ZoomStep = 0.85f;
         const float KeyboardPanSpeed = 1.1f; // view heights per second
         const float KeyboardZoomSpeed = 2.5f;
@@ -112,7 +112,9 @@ namespace GrandStrategy.Game.Map
                     _dragAnchorWorld = ScreenToWorld(_pressStart[b]);
                 }
 
-                if (GameInput.PointerUp(button) && _pressed[b])
+                // A release outside the window never arrives as an "up" event.
+                bool released = GameInput.PointerUp(button) || (_pressed[b] && !GameInput.PointerHeld(button) && !GameInput.PointerDown(button));
+                if (released && _pressed[b])
                 {
                     bool wasClick = !_dragging && !_pressStartedOverUi[b] && !overUi;
                     _pressed[b] = false;

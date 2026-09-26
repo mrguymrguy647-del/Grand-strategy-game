@@ -13,14 +13,21 @@ namespace GrandStrategy.Game.Map
     }
 
     /// <summary>
-    /// Draws the world map. The province ID map is recoloured on the CPU into one big texture
-    /// whenever the map mode or ownership changes; selection and hover are small overlay sprites
-    /// so they never force a full redraw.
+    /// Draws the world map.
+    ///
+    /// Normal path (GPU): the WorldMap shader combines the terrain texture, a province-id texture
+    /// and a small per-province colour table, drawing smooth borders on the graphics card. Changing
+    /// map mode or ownership only rewrites the colour table.
+    ///
+    /// Fallback path (CPU): if the shader can't run on this machine, the map is recoloured on the
+    /// CPU into one texture, with overlay sprites for hover and selection.
     /// </summary>
     public sealed class MapView : MonoBehaviour
     {
         public const float PixelsPerUnit = 100f;
         const int OceanShades = 16;
+        const int LutWidth = 256;
+        const byte WaterOwner = 255;
 
         static readonly Color32 UnownedColor = new Color32(138, 136, 124, 255);
         static readonly Color32 ShallowOcean = new Color32(52, 94, 128, 255);
@@ -49,7 +56,28 @@ namespace GrandStrategy.Game.Map
         ProvinceHighlight _selection;
         ProvinceHighlight _hover;
 
+        // GPU path
+        bool _gpu;
+        Material _material;
+        Mesh _mesh;
+        Texture2D _idTexture;
+        Texture2D _terrain;
+        Texture2D _lut;
+        Color32[] _lutPixels;
+
+        static readonly int TerrainTexId = Shader.PropertyToID("_TerrainTex");
+        static readonly int ProvinceTexId = Shader.PropertyToID("_ProvinceTex");
+        static readonly int LutTexId = Shader.PropertyToID("_LutTex");
+        static readonly int ProvinceTexSizeId = Shader.PropertyToID("_ProvinceTexSize");
+        static readonly int LutSizeId = Shader.PropertyToID("_LutSize");
+        static readonly int SelectedIdId = Shader.PropertyToID("_SelectedId");
+        static readonly int HoverIdId = Shader.PropertyToID("_HoverId");
+        static readonly int TintStrengthId = Shader.PropertyToID("_TintStrength");
+
         public MapMode Mode { get; private set; } = MapMode.Political;
+
+        /// <summary>True when the shader renderer is in use (false = CPU fallback).</summary>
+        public bool UsesShader => _gpu;
         public int Width => _width;
         public int Height => _height;
 
@@ -73,6 +101,150 @@ namespace GrandStrategy.Game.Map
             _countryEdge = new Color32[n];
             _ownerIndex = new int[n];
 
+            _subscriptions.Add(world.Events.Subscribe<ProvinceOwnerChanged>(_ => _dirty = true));
+            _subscriptions.Add(world.Events.Subscribe<PlayerCountryChanged>(_ => _dirty = true));
+
+            var shader = Resources.Load<Shader>("Shaders/WorldMap");
+            if (shader != null && shader.isSupported && SystemInfo.graphicsShaderLevel >= 35)
+            {
+                try
+                {
+                    InitializeGpu(shader);
+                    return;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("Map shader setup failed, using the CPU map instead: " + e.Message);
+                    CleanUpGpu();
+                }
+            }
+            else
+            {
+                Debug.LogWarning("Map shader not available on this machine; using the CPU map.");
+            }
+            InitializeCpu();
+        }
+
+        // ------------------------------------------------------------------ GPU path
+
+        void InitializeGpu(Shader shader)
+        {
+            _gpu = true;
+            _terrain = MapAssets.LoadTerrain();
+            if (_terrain == null)
+            {
+                _terrain = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                _terrain.SetPixels32(new[] { DeepOcean, DeepOcean, DeepOcean, DeepOcean });
+                _terrain.Apply();
+            }
+
+            _idTexture = CreateIdTexture();
+
+            int lutHeight = (_world.ProvinceCount + 1 + LutWidth - 1) / LutWidth;
+            _lut = new Texture2D(LutWidth, lutHeight, TextureFormat.RGBA32, false, false)
+            {
+                name = "ProvinceColours",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            _lutPixels = new Color32[LutWidth * lutHeight];
+
+            _material = new Material(shader) { name = "WorldMap" };
+            _material.SetTexture(TerrainTexId, _terrain);
+            _material.SetTexture(ProvinceTexId, _idTexture);
+            _material.SetTexture(LutTexId, _lut);
+            _material.SetVector(ProvinceTexSizeId, new Vector4(_width, _height, 1f / _width, 1f / _height));
+            _material.SetVector(LutSizeId, new Vector4(LutWidth, lutHeight, 1f / LutWidth, 1f / lutHeight));
+            _material.SetFloat(SelectedIdId, 0);
+            _material.SetFloat(HoverIdId, 0);
+
+            _mesh = CreateQuad(WorldRect);
+            gameObject.AddComponent<MeshFilter>().sharedMesh = _mesh;
+            var mr = gameObject.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = _material;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            mr.sortingOrder = 0;
+
+            UpdateLut();
+        }
+
+        Texture2D CreateIdTexture()
+        {
+            Texture2D tex;
+            if (SystemInfo.SupportsTextureFormat(TextureFormat.RG16))
+            {
+                // Little-endian ushort = low byte in R, high byte in G: exactly what the shader decodes.
+                tex = new Texture2D(_width, _height, TextureFormat.RG16, false, true);
+                tex.SetPixelData(_ids, 0);
+            }
+            else
+            {
+                tex = new Texture2D(_width, _height, TextureFormat.RGBA32, false, true);
+                var px = new Color32[_ids.Length];
+                for (int i = 0; i < px.Length; i++)
+                    px[i] = new Color32((byte)(_ids[i] & 255), (byte)(_ids[i] >> 8), 0, 255);
+                tex.SetPixels32(px);
+            }
+            tex.name = "ProvinceIds";
+            tex.filterMode = FilterMode.Point;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        static Mesh CreateQuad(Rect r)
+        {
+            var mesh = new Mesh { name = "WorldMapQuad" };
+            mesh.vertices = new[]
+            {
+                new Vector3(r.xMin, r.yMin, 0), new Vector3(r.xMax, r.yMin, 0),
+                new Vector3(r.xMin, r.yMax, 0), new Vector3(r.xMax, r.yMax, 0),
+            };
+            mesh.uv = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 1), new Vector2(1, 1) };
+            mesh.triangles = new[] { 0, 2, 1, 2, 3, 1 };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        void UpdateLut()
+        {
+            _dirty = false;
+            ComputeProvinceColors();
+            _lutPixels[0] = new Color32(0, 0, 0, WaterOwner);
+            for (int id = 1; id < _fill.Length; id++)
+            {
+                var c = _fill[id];
+                int owner = _ownerIndex[id];
+                // Owner 0 = unowned land; country indexes wrap below the water marker.
+                c.a = owner <= 0 ? (byte)0 : (byte)(1 + (owner - 1) % (WaterOwner - 1));
+                _lutPixels[id] = c;
+            }
+            _lut.SetPixels32(_lutPixels);
+            _lut.Apply(false);
+            _material.SetFloat(TintStrengthId, Mode == MapMode.Political ? 0.78f : 0.9f);
+        }
+
+        void CleanUpGpu()
+        {
+            _gpu = false;
+            var mr = GetComponent<MeshRenderer>();
+            if (mr != null) Destroy(mr);
+            var mf = GetComponent<MeshFilter>();
+            if (mf != null) Destroy(mf);
+            if (_material != null) Destroy(_material);
+            if (_mesh != null) Destroy(_mesh);
+            if (_idTexture != null) Destroy(_idTexture);
+            if (_terrain != null) Destroy(_terrain);
+            if (_lut != null) Destroy(_lut);
+            _material = null;
+        }
+
+        // ------------------------------------------------------------------ CPU fallback path
+
+        void InitializeCpu()
+        {
+            _gpu = false;
             BuildOceanShading();
 
             _pixels = new Color32[_width * _height];
@@ -84,16 +256,16 @@ namespace GrandStrategy.Game.Map
                 anisoLevel = 4,
             };
 
-            var sr = gameObject.AddComponent<SpriteRenderer>();
+            // On a child object so it never clashes with the GPU path's MeshRenderer.
+            var cpuMap = new GameObject("Map (CPU)");
+            cpuMap.transform.SetParent(transform, false);
+            var sr = cpuMap.AddComponent<SpriteRenderer>();
             sr.sprite = Sprite.Create(_texture, new Rect(0, 0, _width, _height), new Vector2(0.5f, 0.5f),
                 PixelsPerUnit, 0, SpriteMeshType.FullRect);
             sr.sortingOrder = 0;
 
             _selection = ProvinceHighlight.Create(transform, "Selection", 20, new Color32(255, 255, 255, 70), new Color32(255, 244, 200, 255));
             _hover = ProvinceHighlight.Create(transform, "Hover", 10, new Color32(255, 255, 255, 35), new Color32(255, 255, 255, 140));
-
-            _subscriptions.Add(world.Events.Subscribe<ProvinceOwnerChanged>(_ => _dirty = true));
-            _subscriptions.Add(world.Events.Subscribe<PlayerCountryChanged>(_ => _dirty = true));
 
             Redraw();
         }
@@ -105,11 +277,16 @@ namespace GrandStrategy.Game.Map
             _subscriptions.Clear();
             if (_texture != null)
                 Destroy(_texture);
+            CleanUpGpu();
         }
 
         void LateUpdate()
         {
-            if (_dirty)
+            if (!_dirty)
+                return;
+            if (_gpu)
+                UpdateLut();
+            else
                 Redraw();
         }
 
@@ -118,7 +295,10 @@ namespace GrandStrategy.Game.Map
             if (mode == Mode)
                 return;
             Mode = mode;
-            Redraw();
+            if (_gpu)
+                UpdateLut();
+            else
+                Redraw();
             ModeChanged?.Invoke(mode);
         }
 
@@ -143,8 +323,30 @@ namespace GrandStrategy.Game.Map
             return p == null ? Vector3.zero : PixelToWorld(p.CenterX, p.CenterY);
         }
 
-        public void SetSelected(int provinceId) => _selection.Show(this, provinceId);
-        public void SetHover(int provinceId) => _hover.Show(this, provinceId);
+        public void SetSelected(int provinceId)
+        {
+            if (_gpu)
+            {
+                _material.SetFloat(SelectedIdId, provinceId);
+            }
+            else
+            {
+                _selection.Show(this, provinceId);
+            }
+        }
+
+        public void SetHover(int provinceId)
+        {
+            if (_gpu)
+            {
+                _material.SetFloat(HoverIdId, provinceId);
+            }
+            else
+            {
+                _hover.Show(this, provinceId);
+            }
+        }
+
 
         // ------------------------------------------------------------------ drawing
 

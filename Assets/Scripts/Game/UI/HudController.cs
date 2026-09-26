@@ -37,9 +37,13 @@ namespace GrandStrategy.Game.UI
         Label _tooltip;
         VisualElement _toasts;
         VisualElement _settings;
+        Label _diagnostics;
         VisualElement _gameOver;
         VisualElement _loading;
         Label _loadingText;
+
+        /// <summary>Full-screen layer behind every panel, used for country names on the map.</summary>
+        public VisualElement MapLabelLayer { get; private set; }
 
         string _shownDate;
         int _shownSpeed = -1;
@@ -88,6 +92,11 @@ namespace GrandStrategy.Game.UI
             _root = _document.rootVisualElement;
             _root.pickingMode = PickingMode.Ignore;
             Ui.Fill(_root);
+
+            // Added first so it sits behind every panel.
+            MapLabelLayer = Ui.Element("map-labels");
+            Ui.Fill(MapLabelLayer);
+            _root.Add(MapLabelLayer);
         }
 
         void BuildTopBar()
@@ -273,6 +282,10 @@ namespace GrandStrategy.Game.UI
             note.style.marginTop = 14;
             panel.Add(note);
 
+            _diagnostics = Ui.Label("", 12, new Color(1, 1, 1, 0.45f));
+            _diagnostics.style.marginTop = 12;
+            panel.Add(_diagnostics);
+
             var close = Ui.Button("Close", ToggleSettings, true);
             close.style.marginTop = 18;
             close.style.alignSelf = Align.FlexEnd;
@@ -391,6 +404,9 @@ namespace GrandStrategy.Game.UI
         public void ToggleSettings()
         {
             bool show = _settings.style.display == DisplayStyle.None;
+            if (show)
+                _diagnostics.text = $"Unity {Application.unityVersion}  |  map: {(_game.Map == null ? "-" : _game.Map.UsesShader ? "shader" : "CPU fallback")}" +
+                                    $"  |  input: {GameInput.BackendName}  |  {SystemInfo.graphicsDeviceType}";
             Ui.Show(_settings, show);
         }
 

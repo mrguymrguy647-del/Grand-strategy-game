@@ -37,7 +37,12 @@ NE_FILES = {
     "admin0": "ne_10m_admin_0_countries.geojson",
     "admin1": "ne_10m_admin_1_states_provinces.geojson",
     "places": "ne_10m_populated_places_simple.geojson",
+    "lakes": "ne_10m_lakes.geojson",
+    "rivers": "ne_10m_rivers_lake_centerlines.geojson",
 }
+
+# Lakes at or below this Natural Earth scale rank are cut out of the land as water.
+MAX_LAKE_SCALERANK = 5
 
 # Latitude range of the map (degrees). Antarctica is left out.
 MIN_LAT = -56.0
@@ -60,13 +65,16 @@ INDEPENDENT = {"PSX"}
 # Countries with several capitals in Natural Earth: the seat of government to use.
 CAPITAL_OVERRIDES = {"ZAF": "Pretoria"}
 
+# Shorter display names where Natural Earth's are too long for the map.
+NAME_OVERRIDES = {"USA": "United States"}
+
 # Hand-picked colours for well known countries; everyone else gets a generated colour.
 FIXED_COLORS = {
     "USA": "#3a5ba0", "CAN": "#b5484f", "MEX": "#4f8a5b", "BRA": "#4a9a4f",
     "ARG": "#7fb3d5", "GBR": "#b83a3a", "FRA": "#3f6fc0", "DEU": "#6b6b6b",
     "ITA": "#4e9a6a", "ESP": "#d6a33c", "RUS": "#3f7a4a", "CHN": "#c4513c",
     "IND": "#e08f3c", "JPN": "#d9d0c1", "KOR": "#6f8fc9", "PRK": "#8c3b3b",
-    "AUS": "#3e8f86", "TUR": "#a8563c", "IRN": "#4c8a4c", "SAU": "#5f9e5a",
+    "AUS": "#3e8f86", "TUR": "#a8563c", "IRN": "#4c8a4c", "SAU": "#9aa857",
     "EGY": "#c7b06a", "ISR": "#5f7fb5", "UKR": "#e2c24a", "POL": "#c75b6b",
     "PAK": "#2f6e4a", "IDN": "#b0453a", "NGA": "#5ca35c", "ZAF": "#c98e3f",
 }
@@ -221,6 +229,38 @@ def rasterize(feature_keys, key_to_id, proj):
             if len(hole) >= 3:
                 draw.polygon(hole, fill=0)
     return np.array(img, dtype=np.int32)
+
+
+def lake_features(lakes):
+    """Large, permanent lakes and reservoirs that should show as water on the map."""
+    keep = []
+    for f in lakes:
+        p = f["properties"]
+        if p.get("featurecla") not in ("Lake", "Reservoir"):
+            continue  # salt pans such as Lake Eyre stay land
+        if (p.get("scalerank") if p.get("scalerank") is not None else 99) > MAX_LAKE_SCALERANK:
+            continue
+        keep.append(f)
+    return keep
+
+
+def lake_mask(lakes, proj, width=None, height=None):
+    """Boolean mask of lake water at the given raster size (defaults to the map size)."""
+    width = width or proj.width
+    height = height or proj.height
+    sx = width / proj.width
+    sy = height / proj.height
+    img = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(img)
+    for f in lakes:
+        for poly in polygons_of(f["geometry"]):
+            rings = [[(x * sx, y * sy) for x, y in (proj.to_image(lon, lat) for lon, lat in ring)] for ring in poly]
+            if len(rings[0]) >= 3:
+                draw.polygon(rings[0], fill=1)
+            for island in rings[1:]:
+                if len(island) >= 3:
+                    draw.polygon(island, fill=0)
+    return np.array(img, dtype=bool)
 
 
 def adjacency(arr):
@@ -385,6 +425,9 @@ def main():
         key_to_id[key] = i
 
     arr = rasterize(feature_keys, key_to_id, proj)
+    lakes = lake_features(load_features(paths["lakes"]))
+    arr[lake_mask(lakes, proj)] = 0
+    print(f"Cut {len(lakes)} lakes out of the land")
     arr, dropped = merge_small(arr, units, id_to_key)
     print(f"Dropped {dropped} tiny unowned areas")
 
@@ -568,7 +611,7 @@ def main():
         row = a0_rows[tag]
         countries.append({
             "tag": tag,
-            "name": row["NAME"],
+            "name": NAME_OVERRIDES.get(tag, row["NAME"]),
             "formalName": row.get("FORMAL_EN") or row.get("NAME_LONG") or row["NAME"],
             "isoA2": row.get("ISO_A2_EH") or row.get("ISO_A2") or "",
             "color": ccolors[tag],
