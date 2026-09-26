@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Simulation", "Simulation\Simulation.csproj", "{C04B0493-2726-4E4C-B35C-D1F6EA92ED36}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game", "Game\Game.csproj", "{45991222-314C-4576-8BF8-28B9174F25B8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Editor", "Editor\Editor.csproj", "{7D56DAAA-CE8F-492A-B483-4F30AE816657}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C04B0493-2726-4E4C-B35C-D1F6EA92ED36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C04B0493-2726-4E4C-B35C-D1F6EA92ED36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C04B0493-2726-4E4C-B35C-D1F6EA92ED36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C04B0493-2726-4E4C-B35C-D1F6EA92ED36}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45991222-314C-4576-8BF8-28B9174F25B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45991222-314C-4576-8BF8-28B9174F25B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45991222-314C-4576-8BF8-28B9174F25B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45991222-314C-4576-8BF8-28B9174F25B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D56DAAA-CE8F-492A-B483-4F30AE816657}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D56DAAA-CE8F-492A-B483-4F30AE816657}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D56DAAA-CE8F-492A-B483-4F30AE816657}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D56DAAA-CE8F-492A-B483-4F30AE816657}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

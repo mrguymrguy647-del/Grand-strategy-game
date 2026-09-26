@@ -1,0 +1,15 @@
+Third-party art used in this game
+================================
+
+Flags: flag-icons by Panayiotis Lipiridis and contributors - MIT License
+  https://github.com/lipis/flag-icons
+
+Icons: game-icons.net by Lorc (https://lorcblog.blogspot.com) and Delapouite (https://delapouite.com)
+  Licensed under Creative Commons Attribution 3.0 (CC BY 3.0) - https://creativecommons.org/licenses/by/3.0/
+  Recoloured to white for the interface.
+
+Fonts: Barlow by Jeremy Tribby - SIL Open Font License 1.1 (see Fonts/OFL.txt)
+  https://github.com/google/fonts/tree/main/ofl/barlowsemicondensed
+
+Map data and terrain: Natural Earth - public domain
+  https://www.naturalearthdata.com/
