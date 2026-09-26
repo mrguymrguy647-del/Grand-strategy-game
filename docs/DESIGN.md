@@ -1,6 +1,6 @@
 # Grand Strategy (working title) — Design Document
 
-Modern-day grand strategy game built in **Unity 6.6 (6000.6.2f1)**.
+Modern-day grand strategy game built in **Unity 6.6 (6000.6.3f1 or newer)**.
 Start date **1 January 2026**. Every real country, split into provinces.
 
 ---

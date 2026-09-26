@@ -43,3 +43,6 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Download cache of Tools/assets/fetch_ui_assets.py
+Tools/assets/.cache/

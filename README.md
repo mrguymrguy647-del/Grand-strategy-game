@@ -43,14 +43,29 @@ What you can do today:
 
 ## How to open it
 
-1. Install [Unity Hub](https://unity.com/download).
-2. In Unity Hub go to **Installs → Install Editor** and install **Unity 6.6 (6000.6.2f1)** or any newer 6.6 version.
-3. Clone this repository, or download it as a ZIP and unzip it.
-4. In Unity Hub go to **Projects → Add → Add project from disk** and choose the repository folder.
-5. Open the project. The first time, Unity takes a few minutes to set it up.
-6. If Unity asks whether to **enable the new Input System backends**, click **Yes**. Unity restarts once.
-7. The project opens in `Assets/Scenes/Main.unity`, which is created automatically. Press **Play** ▶.
-   The game also starts from any other scene.
+> **Pressing Play shows only a sky, and the Project window says Assets is empty?**
+> Unity opened the wrong folder and created a new, empty project there. None of the game is in it.
+> The folder you open in Unity Hub must **directly** contain `Assets`, `Packages`, `ProjectSettings` and `README.md`. See step 3 below.
+
+1. Install [Unity Hub](https://unity.com/download). In Unity Hub go to **Installs → Install Editor** and install **Unity 6.6 (6000.6.3f1)** or any newer 6.6 version.
+2. Get the project. Either option works; GitHub Desktop is easier.
+   - **Recommended: GitHub Desktop.**
+     1. Install [GitHub Desktop](https://desktop.github.com/).
+     2. Choose **File → Clone repository → URL**, enter `mrguymrguy647-del/Grand-strategy-game`, and pick a short local path such as `C:\Games`.
+     3. Use the **Current branch** menu at the top to switch to the branch you were given (for example `claude/practical-davinci-4niemu`).
+     4. To get updates later, click **Fetch origin**, then **Pull origin**. Unity then re-imports only what changed.
+   - **ZIP.**
+     1. On GitHub, pick the branch, then choose **Code → Download ZIP** and unzip it.
+     2. Windows unzips it into **a folder inside a folder with the same name**. The project is the **inner** folder.
+     3. Move the inner folder to a short path such as `C:\Games\GrandStrategy`.
+3. Check the folder before you open it. It must contain `Assets`, `Packages`, `ProjectSettings`, `Tools`, `docs` and `README.md`. If you only see one folder inside, open that folder and look again.
+4. In Unity Hub go to **Projects → Add → Add project from disk** and choose that folder. Open it. The first time, Unity takes a few minutes to set it up.
+5. If Unity asks whether to **enable the new Input System backends**, click **Yes**. Unity restarts once.
+6. Check that you are in the right project:
+   - the menu bar has a **Grand Strategy** menu;
+   - the Project window's `Assets` shows `Resources`, `Scripts` and `StreamingAssets`;
+   - `Packages` lists **Input System**.
+7. Press **Play** ▶. A loading screen appears, then the world map. The game starts from any scene.
 
 ## If something goes wrong
 
