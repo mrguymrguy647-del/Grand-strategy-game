@@ -1,0 +1,9 @@
+{
+    "heavyLossThreshold": 0.65,
+    "desperateMorale": -0.25,
+    "desperateDays": 365,
+    "heroicDefenseMorale": 0.15,
+    "heroicDefenseDays": 180,
+    "routedMorale": -0.10,
+    "routedDays": 90
+}
