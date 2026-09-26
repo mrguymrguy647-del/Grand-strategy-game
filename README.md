@@ -4,24 +4,42 @@ A modern-day grand strategy game made in **Unity 6.6**. The game starts on 1 Jan
 
 The special feature is the **Capital Battle**. Most fighting is simple and happens province by province. But when an army reaches an enemy capital, a real-time battle decides that nation's fate. Generals command every division, and you can take direct control of one division or all of them. The full design is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
-## Status: Milestone 1, the world map
+## Status: Phase 1, "Run your nation"
 
-- A real-world map: **2,450 provinces** and **198 countries** built from Natural Earth borders.
-- **Real terrain** under the country colours: mountains, deserts, ice, rivers, lakes and coastal shallows.
-- **Smooth borders** drawn by a custom shader: thin province lines, bold country lines and a clean coastline.
-- **Country names on the map**, sized and angled to fit each country. Small countries appear as you zoom in.
-- Pan and zoom around the map, hover over and click provinces.
-- Pick any country and **play as it**.
-- A clock with **pause and 5 speeds**, starting 1 January 2026.
-- Map modes: **Political**, **Population** and **Wealth**.
-- Capital markers on the map. Your capital is gold, and a desperate "last capital" is red.
-- **Music and sound effects.** Every mood (menu, peace, tension, war, capital battle, victory, defeat) has its own music track, and every UI action and event has a sound. All of it is generated in code, so no audio files are needed.
-- **Capital Battle rules** are implemented and tested:
-  - A winner who loses **less than 65%** of their troops annexes the whole country.
-  - A winner who loses **65% or more** takes only the capital. The loser sets up a desperate last capital and gets a morale penalty.
-  - If the defender wins, the capital holds.
+The game is built in phases (full roadmap in [`docs/DESIGN.md`](docs/DESIGN.md), section 6):
 
-  Until armies exist, the country panel has test buttons that apply these rules, so you can watch them work on the map.
+| Phase | Theme | State |
+|---|---|---|
+| 1 | Run your nation: economy, politics, diplomacy, events, new interface | **Done** |
+| 2 | Military and war, plus win conditions | Next |
+| 3 | Living world: AI nations that act on their own, world crises | Planned |
+| 4 | Capital Battle in 3D (URP, generals, control one division or all of them) | Planned |
+| 5 | Technology, save/load, tutorial, balance and polish | Planned |
+
+What you can do today:
+
+- **Click any country** to open its panel. It has four tabs: **Overview**, **Economy**, **Politics** and **Diplomacy**. Every number has a tooltip explaining where it comes from.
+- **Economy.** Each country has GDP, growth, inflation, a budget (taxes, foreign aid, five spending areas and interest), a deficit that turns into debt, an interest rate and a credit rating (AAA to D). Pay more interest than you can afford for six months and you default.
+  - For your own country, sliders set the tax rate and the spending on the military, welfare, education, infrastructure and administration. The panel shows the monthly balance and the effect on approval as you drag.
+  - You can borrow, repay debt, and launch a stimulus package.
+- **Politics.** Each country has a government type (full democracy to absolute monarchy), stability, and public approval.
+  - Democracies hold elections, and you can lose them.
+  - Low stability brings protests. Stability under 10 for three months brings a revolution.
+  - Decisions: propaganda, reforms, crackdowns (not for democracies) and early elections.
+- **Diplomacy.** Countries have relations from −100 to +100, set by blocs (EU, NATO, BRICS, ASEAN and more), rivalries and your actions.
+  - Actions: improve relations, denounce, trade deals, sanctions, alliances and military pacts.
+  - Before you propose something, the panel shows whether the other side will say yes, and why.
+  - Countries you sanction may sanction you back.
+- **Events with choices.** Protests, election results, debt crises, trade offers, sanctions, scandals, disasters and booms. The game pauses until you choose.
+- **A real-world start (2026).** Tax levels, debt, military spending, government types, alliances, rivalries and the sanctions in force are all based on each country's real situation.
+- **You can lose.** If your government is overthrown, or your nation is annexed, the game ends.
+- **A new look.** Flags, icons, a new font, a top bar with your key numbers, a news feed, and a gold outline on the selected country.
+- **Seven map modes:** Political, Diplomatic, Wealth, Growth, Stability, Government and Population.
+- Also from Milestone 1:
+  - A real-world map of **2,450 provinces** and **198 countries** with real terrain.
+  - Smooth borders and country names on the map.
+  - Generated music and sound effects.
+  - The **Capital Battle rules**: a winner who loses under 65% of its troops annexes the whole country; 65% or more takes only the capital and leaves the loser a desperate last capital. You can test these from the developer panel (**F12**) until armies arrive in Phase 2.
 
 ## How to open it
 
@@ -46,10 +64,12 @@ The special feature is the **Capital Battle**. Most fighting is simple and happe
 |---|---|
 | Move the map | `W A S D` / arrow keys, or drag with any mouse button |
 | Zoom | Mouse wheel, or `Q` / `E` |
-| Select a province | Left click (right click or `Esc` to deselect) |
+| Select a country (opens its panel) | Left click (right click or `Esc` to close) |
 | Pause / resume | `Space` |
 | Game speed | `1`–`5`, or `+` / `-` |
-| Map modes | `F1` Political, `F2` Population, `F3` Wealth |
+| Map modes | `F1` Political, `F2` Diplomatic, `F3` Wealth, `F4` Growth, `F5` Stability, `F6` Government, `F7` Population |
+| Explain a number | Hover over it |
+| Developer tools (test events, Capital Battle) | `F12` |
 | Mute | `M` |
 
 ## Project layout
@@ -57,20 +77,30 @@ The special feature is the **Capital Battle**. Most fighting is simple and happe
 ```
 Assets/
   Scripts/Simulation/   Game rules in pure C#, with no Unity code (tested outside Unity)
+    Economy/ Politics/ Diplomacy/ Events/   The Phase 1 nation systems
+    Core/GameSimulation.cs                  Runs them every in-game month
   Scripts/Game/         Unity side: bootstrap, map, camera, input, UI, audio
-  Scripts/Editor/       Editor-only setup (creates the main scene)
-  Resources/Shaders/    WorldMap shader (terrain, colours, borders)
-  StreamingAssets/Data/ Map data (provinces.png / .json, countries.json) and rules (war.json)
-  Resources/            UI theme, plus optional audio files to replace the generated ones
+  Scripts/Editor/       Editor-only setup (main scene, UI texture import settings)
+  Resources/Shaders/    WorldMap shader (terrain, colours, borders, selection)
+  Resources/UI/         Game.uss stylesheet, runtime theme, panel textures
+  Resources/Flags|Icons|Fonts/   Interface art (see Credits)
+  StreamingAssets/Data/ Map/ (provinces, countries), World/ (nations, diplomacy), Rules/ (tuning)
 docs/DESIGN.md          Game design
 Tests/                  .NET unit tests
-Tools/mapgen/           Builds the map data from Natural Earth
+Tools/mapgen/           Builds the map data from Natural Earth, and the nation data
+Tools/assets/           Downloads and prepares flags, icons and fonts
 Tools/unity_meta.py     Creates stable .meta files for files added outside Unity
 ```
 
 ## Tuning
 
-The war numbers are in `Assets/StreamingAssets/Data/Rules/war.json`. They include the 65% heavy-loss line and the size and length of each morale bonus or penalty. Edit the file and press Play again; no code changes are needed.
+All the numbers are in `Assets/StreamingAssets/Data/`. Edit a file and press Play again; no code changes are needed.
+
+- `Rules/war.json`: the 65% heavy-loss line and the size and length of each morale bonus or penalty.
+- `Rules/economy.json`: tax drag, how interest rates react to debt, when a default happens, and more.
+- `Rules/politics.json`: how fast approval and stability move, protest and revolution thresholds, and election rules.
+- `Rules/diplomacy.json`: how relations drift, and what it takes for the AI to accept a trade deal or alliance.
+- `World/nations.json` and `World/diplomacy.json`: each country's starting economy and government, plus blocs, relations and sanctions. These are generated by `Tools/mapgen/generate_nations.py`, so edit that script rather than the JSON.
 
 ## Adding your own music and sounds
 
@@ -81,7 +111,7 @@ Drop audio files into `Assets/Resources/Audio/Music/<Mood>/` or `Assets/Resource
 Run the tests. This needs the .NET 8 SDK, but not Unity:
 
 ```
-dotnet test Tests/Simulation.Tests   # dates, clock, world, Capital Battle rules, map data checks
+dotnet test Tests/Simulation.Tests   # clock, world, Capital Battle, economy, politics, diplomacy, a 10-year world run
 dotnet test Tests/Audio.Tests        # every music loop and sound effect renders cleanly
 ```
 
@@ -91,9 +121,16 @@ Rebuild the map data after changing the generators:
 pip install -r Tools/mapgen/requirements.txt
 python3 Tools/mapgen/generate_map.py       # provinces.png, provinces.json, countries.json
 python3 Tools/mapgen/generate_terrain.py   # terrain.jpg (relief, water, lakes, rivers)
+python3 Tools/mapgen/generate_nations.py   # nations.json, diplomacy.json (economy, government, blocs, sanctions)
+pip install cairosvg pillow numpy
+python3 Tools/assets/fetch_ui_assets.py    # flags, icons, fonts, panel textures
 python3 Tools/unity_meta.py
 ```
 
 ## Credits
 
 - Map data and terrain relief: [Natural Earth](https://www.naturalearthdata.com/), public domain. The shaded-relief image comes from the `basemap-data` package on PyPI. Borders and country assignments follow Natural Earth's defaults (with Palestine as its own country), and population and GDP figures are its estimates. Province populations are spread out from the country totals.
+- Flags: [flag-icons](https://github.com/lipis/flag-icons) by Panayiotis Lipiridis and contributors, MIT License.
+- Icons: [game-icons.net](https://game-icons.net) by Lorc and Delapouite, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). They were recoloured to white.
+- Font: [Barlow](https://github.com/google/fonts/tree/main/ofl/barlowsemicondensed) by Jeremy Tribby, SIL Open Font License 1.1.
+- Starting economic and political figures are rounded approximations drawn from public sources (IMF, World Bank, SIPRI, EIU Democracy Index) and simplified for the game.

@@ -29,6 +29,7 @@ namespace GrandStrategy.Simulation
                 if (_countries.ContainsKey(c.Tag))
                     throw new ArgumentException($"Duplicate country tag {c.Tag}.");
                 _countries.Add(c.Tag, c);
+                c.Index = _countryList.Count;
                 _countryList.Add(c);
             }
 

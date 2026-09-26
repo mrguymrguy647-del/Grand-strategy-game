@@ -11,14 +11,24 @@ namespace GrandStrategy.Simulation.Tests
     /// <summary>Checks the generated map data that ships with the game.</summary>
     public class WorldDataTests
     {
-        static readonly Lazy<(ProvinceFile provinces, CountryFile countries, WarRules rules)> Files = new(() =>
+        internal static readonly Lazy<(ProvinceFile provinces, CountryFile countries, WarRules rules)> Files = new(() =>
+            (Read<ProvinceFile>("Map", "provinces.json"), Read<CountryFile>("Map", "countries.json"), Read<WarRules>("Rules", "war.json")));
+
+        internal static T Read<T>(params string[] path)
         {
-            var dir = FindRepoRoot();
             var options = new JsonSerializerOptions { IncludeFields = true };
-            T Read<T>(params string[] path) =>
-                JsonSerializer.Deserialize<T>(File.ReadAllText(Path.Combine(new[] { dir, "Assets", "StreamingAssets", "Data" }.Concat(path).ToArray())), options);
-            return (Read<ProvinceFile>("Map", "provinces.json"), Read<CountryFile>("Map", "countries.json"), Read<WarRules>("Rules", "war.json"));
-        });
+            return JsonSerializer.Deserialize<T>(File.ReadAllText(
+                Path.Combine(new[] { FindRepoRoot(), "Assets", "StreamingAssets", "Data" }.Concat(path).ToArray())), options);
+        }
+
+        /// <summary>The full game world with the nation systems, as the game builds it.</summary>
+        internal static GameSimulation LoadSimulation(int seed = 2026)
+        {
+            var world = LoadWorld();
+            return new GameSimulation(world, Read<NationFile>("World", "nations.json"), Read<DiplomacyFile>("World", "diplomacy.json"),
+                Read<EconomyRules>("Rules", "economy.json"), Read<PoliticsRules>("Rules", "politics.json"),
+                Read<DiplomacyRules>("Rules", "diplomacy.json"), seed);
+        }
 
         static string FindRepoRoot()
         {
@@ -28,7 +38,7 @@ namespace GrandStrategy.Simulation.Tests
             return dir?.FullName ?? throw new DirectoryNotFoundException("Could not find the Unity project root.");
         }
 
-        static WorldState LoadWorld() =>
+        internal static WorldState LoadWorld() =>
             WorldFactory.Create(Files.Value.provinces, Files.Value.countries, Files.Value.rules, WorldFactory.DefaultStartDate);
 
         [Fact]
@@ -38,6 +48,25 @@ namespace GrandStrategy.Simulation.Tests
             Assert.Empty(world.LoadWarnings);
             Assert.True(world.ProvinceCount > 2000);
             Assert.True(world.Countries.Count > 190);
+        }
+
+        [Fact]
+        public void EveryCountryHasNationDataAndValidBlocs()
+        {
+            var sim = LoadSimulation();
+            Assert.Empty(sim.World.LoadWarnings);
+            foreach (var c in sim.World.Countries)
+            {
+                Assert.NotNull(c.Economy);
+                Assert.NotNull(c.Politics);
+                Assert.InRange(c.Economy.TaxRate, 0.05, 0.6);
+                Assert.InRange(c.Economy.TotalSpendingShare, 0.03, 1.0);
+            }
+            var diplomacy = Read<DiplomacyFile>("World", "diplomacy.json");
+            foreach (var bloc in diplomacy.blocs)
+                foreach (var tag in bloc.members)
+                    Assert.NotNull(sim.World.GetCountry(tag));
+            Assert.Equal(32, sim.Diplomacy.FindBloc("NATO").Members.Count);
         }
 
         [Fact]

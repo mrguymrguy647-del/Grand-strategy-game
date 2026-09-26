@@ -16,6 +16,8 @@ Shader "GrandStrategy/WorldMap"
         _LutSize ("Lookup size (w, h, 1/w, 1/h)", Vector) = (256, 16, 0.0039, 0.0625)
         _SelectedId ("Selected province", Float) = 0
         _HoverId ("Hovered province", Float) = 0
+        _SelectedOwner ("Selected country (owner code)", Float) = 0
+        _PlayerOwner ("Player country (owner code)", Float) = 0
         _TintStrength ("Colour strength", Range(0, 1)) = 0.78
         _SmoothRadius ("Border smoothing (texels)", Range(1, 2)) = 1.5
     }
@@ -43,6 +45,8 @@ Shader "GrandStrategy/WorldMap"
             float4 _LutSize;
             float _SelectedId;
             float _HoverId;
+            float _SelectedOwner;
+            float _PlayerOwner;
             float _TintStrength;
             float _SmoothRadius;
 
@@ -175,7 +179,8 @@ Shader "GrandStrategy/WorldMap"
                     float strength = ownerWin < 0.5 ? 0.25 : _TintStrength;
                     col = lerp(terrain, tinted, strength);
                     if (abs(win - _HoverId) < 0.5) col = col * 1.15 + 0.03;
-                    if (abs(win - _SelectedId) < 0.5) col += (1 - col) * 0.22;
+                    if (abs(win - _SelectedId) < 0.5) col += (1 - col) * 0.12;
+                    if (_SelectedOwner > 0.5 && abs(ownerWin - _SelectedOwner) < 0.5) col = col * 1.1 + 0.035;
                 }
 
                 bool hasBorder = abs(run - win) > 0.5;
@@ -199,7 +204,17 @@ Shader "GrandStrategy/WorldMap"
                     col = lerp(col, float3(0.08, 0.13, 0.18), Line(0.8 + 0.4 * zoom, dist) * 0.55);
 
                 if (_SelectedId > 0.5 && hasBorder && (abs(win - _SelectedId) < 0.5 || abs(run - _SelectedId) < 0.5))
-                    col = lerp(col, float3(1.0, 0.95, 0.75), Line(1.6, dist));
+                    col = lerp(col, float3(1.0, 0.95, 0.75), Line(1.0, dist) * 0.6);
+
+                // Gold outlines: the player's nation (thin) and the selected country (bold).
+                bool winPlayer = _PlayerOwner > 0.5 && abs(ownerWin - _PlayerOwner) < 0.5;
+                bool runPlayer = _PlayerOwner > 0.5 && abs(ownerRun - _PlayerOwner) < 0.5;
+                if (hasBorder && winPlayer != runPlayer)
+                    col = lerp(col, float3(0.96, 0.8, 0.38), Line(1.3 + 0.6 * zoom, dist) * 0.85);
+                bool winSel = _SelectedOwner > 0.5 && abs(ownerWin - _SelectedOwner) < 0.5;
+                bool runSel = _SelectedOwner > 0.5 && abs(ownerRun - _SelectedOwner) < 0.5;
+                if (hasBorder && winSel != runSel)
+                    col = lerp(col, float3(1.0, 0.9, 0.55), Line(1.8 + 0.8 * zoom, dist));
 
                 return fixed4(FromGamma(saturate(col)), 1);
             }

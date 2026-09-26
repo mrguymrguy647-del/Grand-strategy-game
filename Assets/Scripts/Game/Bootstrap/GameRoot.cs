@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using GrandStrategy.Game.Audio;
 using GrandStrategy.Game.Map;
 using GrandStrategy.Game.UI;
@@ -29,8 +31,8 @@ namespace GrandStrategy.Game
     }
 
     /// <summary>
-    /// Owns the running game: loads the world, builds the map, camera, HUD and audio,
-    /// runs the clock, and turns player input into game actions.
+    /// Owns the running game: loads the world and the nation systems, builds the map, camera,
+    /// HUD and audio, runs the clock, and turns player input into game actions.
     /// </summary>
     public sealed class GameRoot : MonoBehaviour
     {
@@ -39,16 +41,21 @@ namespace GrandStrategy.Game
 
         readonly List<IDisposable> _subscriptions = new List<IDisposable>();
         int _hoverId = -1;
-        bool _infoDirty;
 
         public WorldState World { get; private set; }
+        public GameSimulation Sim { get; private set; }
         public MapView Map { get; private set; }
         public MapCameraController CameraController { get; private set; }
         public AudioManager Audio { get; private set; }
         public HudController Hud { get; private set; }
         public GamePhase Phase { get; private set; } = GamePhase.Loading;
+        public Country SelectedCountry { get; private set; }
         public int SelectedProvinceId { get; private set; }
         public bool BattleInProgress { get; private set; }
+
+        /// <summary>Time can run: playing, and no event is waiting for the player's decision.</summary>
+        public bool CanRunTime => Phase == GamePhase.Playing && !BattleInProgress && (Hud == null || !Hud.PopupOpen) &&
+                                  (Sim == null || Sim.Events.Pending.Count == 0);
 
         IEnumerator Start()
         {
@@ -76,6 +83,13 @@ namespace GrandStrategy.Game
             {
                 assets = MapAssets.Load();
                 World = WorldFactory.Create(assets.Provinces, assets.Countries, assets.WarRules, WorldFactory.DefaultStartDate);
+                Sim = new GameSimulation(World,
+                    ReadData<NationFile>("World", "nations.json"),
+                    ReadData<DiplomacyFile>("World", "diplomacy.json"),
+                    ReadData<EconomyRules>("Rules", "economy.json", optional: true),
+                    ReadData<PoliticsRules>("Rules", "politics.json", optional: true),
+                    ReadData<DiplomacyRules>("Rules", "diplomacy.json", optional: true),
+                    seed: Environment.TickCount);
                 foreach (var warning in World.LoadWarnings)
                     Debug.LogWarning(warning);
             }
@@ -109,8 +123,14 @@ namespace GrandStrategy.Game
                     Audio.Play(Sfx.NewMonth, 0.8f);
             };
             World.Clock.YearPassed += OnYearPassed;
-            _subscriptions.Add(World.Events.Subscribe<ProvinceOwnerChanged>(_ => _infoDirty = true));
-            _subscriptions.Add(World.Events.Subscribe<ModifiersChanged>(_ => _infoDirty = true));
+            _subscriptions.Add(World.Events.Subscribe<ProvinceOwnerChanged>(_ => Hud.MarkPanelDirty()));
+            _subscriptions.Add(World.Events.Subscribe<ModifiersChanged>(_ => Hud.MarkPanelDirty()));
+            _subscriptions.Add(World.Events.Subscribe<SimulationTicked>(_ => Hud.MarkPanelDirty()));
+            _subscriptions.Add(World.Events.Subscribe<DiplomacyChanged>(_ => Hud.MarkPanelDirty()));
+            _subscriptions.Add(World.Events.Subscribe<PolicyChanged>(_ => Hud.RefreshPanelLive()));
+            _subscriptions.Add(World.Events.Subscribe<NewsPublished>(e => Hud.AddNews(e.Item)));
+            _subscriptions.Add(World.Events.Subscribe<NationalEventRaised>(OnNationalEvent));
+            _subscriptions.Add(World.Events.Subscribe<GovernmentOverthrown>(OnGovernmentOverthrown));
             _subscriptions.Add(World.Events.Subscribe<CapitalMoved>(OnCapitalMoved));
             _subscriptions.Add(World.Events.Subscribe<CountryEliminated>(OnCountryEliminated));
 
@@ -118,11 +138,23 @@ namespace GrandStrategy.Game
             SetPhase(GamePhase.NationSelect);
         }
 
+        static T ReadData<T>(string folder, string file, bool optional = false) where T : class, new()
+        {
+            var path = Path.Combine(MapAssets.DataRoot, folder, file);
+            if (!File.Exists(path))
+            {
+                if (optional)
+                    return new T();
+                throw new FileNotFoundException($"Missing game data file: {path}");
+            }
+            return JsonUtility.FromJson<T>(File.ReadAllText(path)) ?? new T();
+        }
+
         void BuildMap(MapAssets assets, Camera cam)
         {
             Map = new GameObject("World Map").AddComponent<MapView>();
             Map.transform.SetParent(transform, false);
-            Map.Initialize(World, assets);
+            Map.Initialize(World, assets, Sim);
             Map.ModeChanged += _ => Hud.RefreshModeButtons();
             Debug.Log($"Map renderer: {(Map.UsesShader ? "shader" : "CPU fallback")}, {Map.Width}x{Map.Height} province map.");
 
@@ -178,32 +210,34 @@ namespace GrandStrategy.Game
 
             HandleHotkeys();
 
-            if (Phase == GamePhase.Playing && !BattleInProgress)
+            if (!CanRunTime && !World.Clock.IsPaused)
+                World.Clock.SetPaused(true); // events and battles stop the clock
+            if (CanRunTime)
                 World.Clock.Advance(Time.unscaledDeltaTime);
 
             HandleMapPointer();
-
-            if (_infoDirty)
-            {
-                _infoDirty = false;
-                Hud.RefreshInfo();
-            }
         }
 
         void HandleHotkeys()
         {
             if (GameInput.KeyDown(GameKey.Cancel) && !Hud.CloseOverlay())
-                SelectProvince(0);
+                SelectCountry(null);
 
             if (GameInput.KeyDown(GameKey.ToggleMute))
             {
                 Audio.Muted = !Audio.Muted;
                 Hud.Toast(Audio.Muted ? "Sound off" : "Sound on", "Press M to toggle.");
             }
+            if (GameInput.KeyDown(GameKey.DevPanel))
+                Hud.ToggleDevPanel();
 
             if (GameInput.KeyDown(GameKey.MapMode1)) SetMapMode(MapMode.Political);
-            if (GameInput.KeyDown(GameKey.MapMode2)) SetMapMode(MapMode.Population);
+            if (GameInput.KeyDown(GameKey.MapMode2)) SetMapMode(MapMode.Diplomatic);
             if (GameInput.KeyDown(GameKey.MapMode3)) SetMapMode(MapMode.Wealth);
+            if (GameInput.KeyDown(GameKey.MapMode4)) SetMapMode(MapMode.Growth);
+            if (GameInput.KeyDown(GameKey.MapMode5)) SetMapMode(MapMode.Stability);
+            if (GameInput.KeyDown(GameKey.MapMode6)) SetMapMode(MapMode.Government);
+            if (GameInput.KeyDown(GameKey.MapMode7)) SetMapMode(MapMode.Population);
 
             if (Phase != GamePhase.Playing)
                 return;
@@ -219,11 +253,15 @@ namespace GrandStrategy.Game
 
         void HandleMapPointer()
         {
-            bool interactive = Phase == GamePhase.Playing || Phase == GamePhase.NationSelect;
+            bool interactive = (Phase == GamePhase.Playing || Phase == GamePhase.NationSelect) && !Hud.PopupOpen;
             if (interactive && CameraController.LeftClicked)
-                SelectProvince(Map.ProvinceAt(CameraController.PointerWorld));
+            {
+                int id = Map.ProvinceAt(CameraController.PointerWorld);
+                var province = World.GetProvince(id);
+                SelectCountry(World.GetCountry(province?.OwnerTag), id);
+            }
             if (interactive && CameraController.RightClicked)
-                SelectProvince(0);
+                SelectCountry(null);
 
             var pointer = GameInput.PointerPosition;
             int hover = 0;
@@ -236,29 +274,34 @@ namespace GrandStrategy.Game
                 Map.SetHover(hover);
             }
 
-            var province = World.GetProvince(hover);
-            if (province == null)
+            var p = World.GetProvince(hover);
+            if (p == null)
             {
                 Hud.SetTooltip(null, pointer);
                 return;
             }
-            var owner = World.GetCountry(province.OwnerTag);
-            string text = owner == null ? province.Name : $"{province.Name}  -  {owner.Name}";
-            if (owner != null && owner.CapitalProvinceId == province.Id)
+            var owner = World.GetCountry(p.OwnerTag);
+            string text = owner == null ? p.Name : $"{owner.Name}  -  {p.Name}";
+            if (owner != null && owner.CapitalProvinceId == p.Id)
                 text += "  (capital)";
+            if (owner != null && Phase == GamePhase.Playing && World.Player != null && owner != World.Player)
+                text += $"   |   relations {Sim.Diplomacy.Relations(World.Player, owner):+0;-0;0}";
             Hud.SetTooltip(text, pointer);
         }
 
         // ------------------------------------------------------------------ actions (called by input and HUD)
 
-        public void SelectProvince(int provinceId)
+        /// <summary>Opens the country panel (null closes it). The clicked province is shown in Overview.</summary>
+        public void SelectCountry(Country country, int provinceId = 0)
         {
-            if (provinceId == SelectedProvinceId)
-                return;
-            SelectedProvinceId = provinceId;
-            Map.SetSelected(provinceId);
-            Hud.RefreshInfo();
-            if (provinceId != 0)
+            bool changed = country != SelectedCountry;
+            SelectedCountry = country;
+            SelectedProvinceId = country == null ? 0 : provinceId;
+            Map.SetSelectedCountry(country);
+            Map.SetSelected(SelectedProvinceId);
+            Map.SetDiplomacyReference(Phase == GamePhase.Playing && World.Player != null ? World.Player : country);
+            Hud.ShowCountry(country, SelectedProvinceId);
+            if (country != null && changed)
                 Audio.Play(Sfx.ProvinceSelect);
         }
 
@@ -269,18 +312,24 @@ namespace GrandStrategy.Game
                 return;
             World.SetPlayer(tag);
             SetPhase(GamePhase.Playing);
+            Map.SetPlayerCountry(country);
+            Map.SetDiplomacyReference(country);
             Audio.Play(Sfx.NationChosen);
             Audio.PlayMusic(MusicMood.Peace);
             CameraController.FlyTo(Map.ProvinceCenter(country.CapitalProvinceId), 3.2f);
-            Hud.Toast($"You lead {country.Name}", $"It is {World.Clock.Date}. Press Space or Play to start time.");
+            SelectCountry(country, country.CapitalProvinceId);
+            Hud.ShowMessage("crown", $"You lead {country.Name}",
+                $"It is {World.Clock.Date}. Your country's panel is open on the left: check the Economy and Politics tabs, " +
+                "then click other countries for diplomacy. Hover any number to see why it is what it is.\n\n" +
+                "Press Space (or Play) to start time. Keep stability above 10, or your government will fall.");
         }
 
-        public void ReturnToNationSelect()
+        /// <summary>Throws this world away and loads a fresh one (used after a game over).</summary>
+        public void RestartGame()
         {
-            SelectProvince(0);
-            SetPhase(GamePhase.NationSelect);
-            Audio.PlayMusic(MusicMood.Menu);
-            CameraController.ShowWholeMap();
+            World?.Clock.SetPaused(true);
+            new GameObject("Game").AddComponent<GameRoot>();
+            Destroy(gameObject);
         }
 
         public void SetMapMode(MapMode mode)
@@ -293,7 +342,7 @@ namespace GrandStrategy.Game
 
         public void TogglePause()
         {
-            if (Phase != GamePhase.Playing || BattleInProgress)
+            if (Phase != GamePhase.Playing || !CanRunTime && World.Clock.IsPaused)
                 return;
             World.Clock.TogglePause();
             Audio.Play(World.Clock.IsPaused ? Sfx.Pause : Sfx.Resume);
@@ -312,6 +361,56 @@ namespace GrandStrategy.Game
         public void SpeedUp() => SetSpeed(World.Clock.Speed + 1);
         public void SlowDown() => SetSpeed(World.Clock.Speed - 1);
 
+        /// <summary>Runs a diplomatic action from the player and shows the outcome.</summary>
+        public void DoDiplomacy(Country target, DiplomaticAction action)
+        {
+            var player = World.Player;
+            if (player == null || target == null || Phase != GamePhase.Playing)
+                return;
+            var result = Sim.DiplomacySystem.Execute(player, target, action);
+            if (!result.Done)
+            {
+                Hud.Toast("Not possible", result.Message, Ui.Bad);
+                return;
+            }
+            if (result.Preview.NeedsConsent)
+            {
+                Hud.ShowMessage(result.Accepted ? "handshake" : "denounce",
+                    result.Accepted ? "Proposal accepted" : "Proposal refused", result.Message,
+                    result.Preview.Opinion, result.Accepted);
+                Audio.Play(result.Accepted ? Sfx.NationChosen : Sfx.Notification);
+            }
+            else
+            {
+                Hud.Toast(result.Preview.Title, result.Message);
+                Audio.Play(action == DiplomaticAction.ImposeSanctions || action == DiplomaticAction.Denounce ? Sfx.WarDeclared : Sfx.Notification);
+            }
+            Hud.MarkPanelDirty();
+        }
+
+        public void EnactDecision(DecisionId id)
+        {
+            var player = World.Player;
+            if (player == null || Phase != GamePhase.Playing)
+                return;
+            if (Sim.Decisions.Execute(player, id, out var message))
+            {
+                Hud.Toast("Decision enacted", message);
+                Audio.Play(Sfx.Notification);
+            }
+            else
+            {
+                Hud.Toast("Not possible", message, Ui.Bad);
+            }
+            Hud.MarkPanelDirty();
+        }
+
+        public void ResolveEvent(NationalEvent evt, int option)
+        {
+            Sim.Events.Choose(evt, option);
+            Hud.MarkPanelDirty();
+        }
+
         void SetPhase(GamePhase phase)
         {
             Phase = phase;
@@ -321,6 +420,12 @@ namespace GrandStrategy.Game
         }
 
         // ------------------------------------------------------------------ world events
+
+        void OnNationalEvent(NationalEventRaised e)
+        {
+            World.Clock.SetPaused(true);
+            Hud.ShowEvent(e.Event);
+        }
 
         void OnYearPassed(GameDate date)
         {
@@ -335,29 +440,88 @@ namespace GrandStrategy.Game
             if (country == null || province == null)
                 return;
             Hud.Toast($"{country.Name} moves its capital", $"The government flees to {province.Name}.", Ui.Bad);
-            _infoDirty = true;
+            Hud.MarkPanelDirty();
         }
 
         void OnCountryEliminated(CountryEliminated e)
         {
-            _infoDirty = true;
+            Hud.MarkPanelDirty();
             var fallen = World.GetCountry(e.CountryTag);
             var by = World.GetCountry(e.ByTag);
             if (e.CountryTag == World.PlayerTag)
             {
-                SetPhase(GamePhase.GameOver);
-                Audio.Play(Sfx.Defeat);
-                Audio.PlayMusic(MusicMood.Defeat);
+                GameOver("YOUR NATION HAS FALLEN",
+                    $"{fallen?.Name} has been annexed{(by != null ? " by " + by.Name : "")}. History will remember the defence of its capital.");
                 return;
             }
             Hud.Toast($"{fallen?.Name} has fallen", by != null ? $"It has been annexed by {by.Name}." : null, Ui.Bad);
         }
 
-        // ------------------------------------------------------------------ Capital Battle test
+        void OnGovernmentOverthrown(GovernmentOverthrown e)
+        {
+            if (!e.IsPlayer)
+                return;
+            var p = World.Player;
+            GameOver("OVERTHROWN",
+                $"Months of chaos in {p?.Name} ended in revolution. Your government has fallen after " +
+                $"{MonthsPlayed()} months in power.\n\nKeep an eye on stability: low approval turns into anger, protests, then revolution.");
+        }
+
+        int MonthsPlayed()
+        {
+            var d = World.Clock.Date;
+            return (d.Year - 2026) * 12 + d.Month - 1;
+        }
+
+        void GameOver(string title, string text)
+        {
+            SetPhase(GamePhase.GameOver);
+            Audio.Play(Sfx.Defeat);
+            Audio.PlayMusic(MusicMood.Defeat);
+            Hud.ShowGameOver(title, text);
+        }
+
+        // ------------------------------------------------------------------ developer tools
+
+        public void DevTrigger(string what)
+        {
+            var player = World?.Player;
+            if (player == null || Phase != GamePhase.Playing)
+            {
+                Hud.Toast("Developer tools", "Choose a nation first.", Ui.Warn);
+                return;
+            }
+            switch (what)
+            {
+                case "protests":
+                    Sim.Events.RaiseProtests(player);
+                    break;
+                case "random":
+                    double chance = Sim.PoliticsRules.randomEventChance;
+                    Sim.PoliticsRules.randomEventChance = 1;
+                    Sim.Events.Monthly(World.Clock.Date);
+                    Sim.PoliticsRules.randomEventChance = chance;
+                    break;
+                case "trade_offer":
+                    var friend = World.Countries.Where(c => c != player && !c.IsEliminated && !Sim.Diplomacy.AreTradePartners(c, player))
+                        .OrderByDescending(c => Sim.Diplomacy.Relations(c, player)).FirstOrDefault();
+                    if (friend != null)
+                        Sim.Events.RaiseTradeOffer(player, friend);
+                    break;
+                case "money":
+                    Sim.Economy.Borrow(player, 50_000);
+                    break;
+                case "unrest":
+                    player.AddOrRefreshModifier(new Modifier("dev_unrest", "Unrest (developer test)", "Added from the developer panel.", 0, 180) { Stability = -30 });
+                    Sim.Economy.Refresh(player);
+                    break;
+            }
+            Hud.MarkPanelDirty();
+        }
 
         /// <summary>
         /// Developer test: resolves a Capital Battle with fixed losses so the outcome rules can be
-        /// seen on the map before armies and the tactical battle scene exist.
+        /// seen on the map before armies and the tactical battle scene exist (Phase 2).
         /// </summary>
         public void RunCapitalBattleTest(string otherTag, bool playerAttacks, CapitalBattleTestOutcome outcome)
         {
@@ -373,7 +537,6 @@ namespace GrandStrategy.Game
         IEnumerator CapitalBattleTestRoutine(Country player, Country other, bool playerAttacks, CapitalBattleTestOutcome outcome)
         {
             BattleInProgress = true;
-            _infoDirty = true;
             var attacker = playerAttacks ? player : other;
             var defender = playerAttacks ? other : player;
             string capitalName = defender.CapitalName;
@@ -416,7 +579,7 @@ namespace GrandStrategy.Game
             }
 
             BattleInProgress = false;
-            _infoDirty = true;
+            Hud.MarkPanelDirty();
             if (report != null)
                 AnnounceCapitalBattle(report, attacker, defender, capitalName);
         }

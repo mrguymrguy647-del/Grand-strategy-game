@@ -9,9 +9,9 @@ Start date **1 January 2026**. Every real country, split into provinces.
 
 | Pillar | What it means for the player |
 |---|---|
-| **Economy** | GDP, taxes, budget, debt, trade, resources |
-| **Politics** | Government type, stability, approval, elections |
-| **Diplomacy** | Relations, alliances, sanctions, trade deals, the UN |
+| **Economy** | GDP, taxes, budget, debt, trade (Phase 1 ✅), resources (later) |
+| **Politics** | Government type, stability, approval, elections (Phase 1 ✅) |
+| **Diplomacy** | Relations, alliances, sanctions, trade deals (Phase 1 ✅), the UN (later) |
 | **War** | Simple province war on the map → **Capital Battle** decides a nation's fate |
 | **Modern touches** | Nuclear deterrence, cyber operations, proxy wars |
 
@@ -67,7 +67,93 @@ pauses and a **Capital Battle** starts in its own battle scene.
 
 ---
 
-## 3. Audio
+## 3. Running a nation (Phase 1)
+
+Every system is monthly and deterministic for a given seed. They run in a fixed order:
+economy → politics → diplomacy → events (`GameSimulation.RunMonth`). AI countries use the
+same rules as the player. Every derived number keeps a **breakdown** (a list of labelled
+factors), so the UI can explain it in a tooltip, and the AI can explain its answer to a proposal.
+All tuning lives in `Data/Rules/economy.json`, `politics.json` and `diplomacy.json`.
+
+### 3.1 Starting data
+
+`Tools/mapgen/generate_nations.py` writes `Data/World/nations.json` and `Data/World/diplomacy.json`:
+
+* **Nations.** For each of the 198 countries it writes:
+  * Government type, tax revenue, debt, interest rate, safe debt level and foreign aid.
+  * The five spending shares, real growth, inflation and population growth.
+  * Starting stability and approval, and the election calendar.
+* **Where the values come from.** About 60 major countries are entered by hand. The rest get defaults from their World Bank income group.
+* **Diplomacy.** 19 blocs (alliances, unions, trade areas and forums: NATO, CSTO, EU, BRICS, ASEAN, GCC and others), 99 relation overrides (rivalries and friendships), and the sanction regimes in force in 2026.
+
+### 3.2 Economy
+
+* **GDP** lives in the provinces (so the Wealth map follows it). Each month it grows by the real growth rate plus inflation.
+* **Growth** = economic potential + tax level + infrastructure investment + education + stability + debt burden + trade agreements − sanctions against us − cost of our own sanctions ± modifiers ± a small business cycle.
+  * Policy effects are measured against each country's **own starting policy**, so the world is in balance on day one and only changes move the needle.
+* **Budget.**
+  * Revenue: GDP × tax rate × collection efficiency (weaker if administration is underfunded), plus foreign aid.
+  * Costs: military, welfare, education, infrastructure and administration (each a share of GDP), plus interest.
+  * A deficit is borrowed and becomes debt.
+* **Interest rate** moves slowly (debt rolls over), towards the base rate plus a risk premium. The premium grows with debt above the country's safe level and with instability. The result sets a **credit rating** from AAA to D.
+* **Default.** If interest costs more than 55% of revenue for 6 months, the country defaults:
+  * 30% of its debt is written off;
+  * growth drops sharply, and borrowing becomes expensive;
+  * the player chooses between an IMF programme and going it alone.
+* **Player actions:** tax rate (5–60%), each spending share (0–35%), borrow, repay, stimulus package.
+* **AI** adjusts its taxes and spending each January to keep deficits in check.
+
+### 3.3 Politics
+
+* **Government types:** full democracy, flawed democracy, hybrid regime, authoritarian, absolute monarchy.
+* **Approval** moves towards a target made of: the starting baseline, economic growth, taxes, welfare, education and modifiers.
+* **Stability** moves towards a target made of: the baseline, approval, **public anger** (very low approval), security forces (worth more to autocracies), administration and modifiers.
+* **Elections** happen on each country's real calendar, for democracies and hybrid regimes. The chance of re-election depends on approval. Losing brings in a new government with a honeymoon modifier.
+* **Protests** can start below stability 35. **Revolution** follows after 3 months below 10:
+  * for AI countries, the regime changes;
+  * for the player, **the game is lost**.
+* **Decisions** (with cooldowns): stimulus package, propaganda campaign, reform programme, crackdown (not for democracies), early election (democracies only).
+
+### 3.4 Diplomacy
+
+* **Relations** run from −100 to +100. They drift slowly towards a target made of:
+  * shared blocs (alliance > union > trade area > forum);
+  * similar or clashing regimes;
+  * trade deals and sanctions;
+  * historical overrides (rivalries and friendships);
+  * **goodwill** from recent actions, which decays over time.
+* **Actions:**
+  * Improve relations (costs money, has a cooldown), denounce.
+  * Propose or cancel a trade deal.
+  * Impose or lift sanctions.
+  * Propose a military pact, join or leave an alliance.
+  * *Declare war* is shown but locked until Phase 2.
+* **Consent.** Proposals are scored by the other side. The panel shows the verdict and the reasons **before** you click, and the answer popup lists them again.
+* **Effects.** Trade deals add growth to both sides, scaled by the partner's economy. Sanctions cut the target's growth by the combined economic weight of the sanctioners, and cost the sanctioner a little.
+* **AI initiative.**
+  * AI countries offer the player trade deals.
+  * Hostile pairs sometimes sanction each other.
+  * Countries you sanction may retaliate.
+
+### 3.5 Events
+
+* National events pause the game and offer up to three choices, each with its effects spelled out:
+  * protests (negotiate, crack down, wait);
+  * election results;
+  * debt default;
+  * trade offers;
+  * sanctions received;
+  * random events: scandal, natural disaster, tech boom, energy shock, general strike, foreign investment.
+* A news feed reports what happens to you and to the big economies (at least 1% of world GDP).
+
+### 3.6 Win and lose
+
+* **Lose:** your government is overthrown (revolution), or your nation is annexed.
+* **Win:** arrives with Phase 2 (war), because the win conditions are military and economic dominance.
+
+---
+
+## 4. Audio
 
 Audio is a first-class system, not an afterthought.
 
@@ -85,19 +171,23 @@ Audio is a first-class system, not an afterthought.
 
 ---
 
-## 4. Technical architecture
+## 5. Technical architecture
 
 ```
 Assets/
   Scripts/
     Simulation/   Pure C# game rules. No UnityEngine reference (enforced by asmdef).
                   Unit-tested outside Unity (Tests/Simulation.Tests).
+      Core/       GameSimulation (monthly tick), Breakdown/Factor, NationSetup
+      Economy/ Politics/ Diplomacy/ Events/
     Game/         Unity layer: bootstrap, map rendering, camera, input, UI, audio.
-  Resources/      UI theme, optional audio overrides.
+  Resources/      UI stylesheet (UI/Game.uss), flags, icons, fonts, optional audio overrides.
   StreamingAssets/Data/
     Map/          provinces.png (province ID map), provinces.json, countries.json
-    Rules/        war.json and other tunable numbers
-Tools/mapgen/     Python tool that builds the map data from Natural Earth
+    World/        nations.json, diplomacy.json (starting economy, politics, blocs)
+    Rules/        war.json, economy.json, politics.json, diplomacy.json
+Tools/mapgen/     Python tools that build the map and nation data
+Tools/assets/     Downloads and prepares flags, icons and fonts
 Tests/            .NET test project for the simulation
 ```
 
@@ -121,22 +211,25 @@ Tests/            .NET test project for the simulation
   (public domain) admin-1 boundaries, projected with the Miller projection.
   Small subdivisions are merged into their regions for playability; micro-states
   too small to show on the map are left out for now.
-* **UI** is UI Toolkit, built in code.
+* **Selection.** Clicking selects a whole country. The shader brightens it and draws a gold outline, using the owner code stored in the colour table's alpha channel. The player's country gets a thin gold outline.
+* **Map modes** (F1–F7): Political, Diplomatic (relations with you, allies, sanctions), Wealth, Growth, Stability, Government and Population. All of them only rewrite the colour table.
+* **UI** is UI Toolkit, built in code and styled by `Resources/UI/Game.uss`.
+  * Views: `TopBar`, `CountryPanel` (tabs), `EventPopup`, `NotificationLog`, `TooltipManager`, and screens for loading, settings, game over and the F12 developer panel.
+  * Hover tooltips are custom, because UI Toolkit shows none at runtime.
 * **No hand-made scenes needed yet.** `GameBootstrap` builds the game when you
   press Play in any scene.
 
 ---
 
-## 5. Milestones
+## 6. Roadmap
 
-1. **World map** — real-world provinces, pan/zoom, click provinces, nation
-   selection, date + speed controls, map modes, music + SFX, Capital Battle
-   outcome rules (with developer test buttons until armies exist). ✅ *built, awaiting first play test*
-2. **Countries & economy** — budget, taxes, GDP growth, debt.
-3. **Diplomacy** — relations, alliances, sanctions, declaring war.
-4. **Province war** — armies, movement, auto-resolved province combat, occupation.
-5. **Capital Battle** — tactical battle scene, generals, take-command system,
-   outcome rules wired to the world map.
-6. **Politics** — stability, elections, government collapse.
-7. **AI** — other nations plan, trade, ally and go to war.
-8. **Events, technology, save/load, polish.**
+The game is built in phases, starting with the systems that every later phase uses: money, stability and relations.
+
+| Phase | Theme | Contents |
+|---|---|---|
+| 0 | World map ✅ | Real-world provinces, pan and zoom, nation selection, clock, map modes, music and sound effects, Capital Battle outcome rules (with developer test buttons). |
+| **1** | **Run your nation ✅** | Economy, politics, diplomacy, events and decisions, the new interface, the country panel, more map modes. You lose if your government is overthrown. |
+| 2 | Military & war | Armies bought from the budget and moved on the map. Declaring war pulls in allies. Province combat, occupation, war score, peace deals and war exhaustion. Auto-resolved Capital Battles use the 65% rule. **Win conditions** and a victory screen. |
+| 3 | Living world | AI nations run their economies, form alliances, sanction and fight each other. World crises: recessions, oil shocks, pandemics. |
+| 4 | Capital Battle (tactical) | Move to URP. A 3D battle at the capital with RPG generals. The player can control one division or all of them. 3D models made in Blender. |
+| 5 | Depth & polish | Technology, save/load, more events, a tutorial, balance and performance. |

@@ -1,112 +1,232 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using GrandStrategy.Game.Audio;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace GrandStrategy.Game.UI
 {
-    /// <summary>Colours and small builders for the code-built UI Toolkit interface.</summary>
+    /// <summary>
+    /// Builders and shared resources for the code-built UI Toolkit interface.
+    /// Look and feel lives in Resources/UI/Game.uss (classes prefixed "gs-"); this class adds
+    /// fonts, icons and flags, which are loaded from Resources.
+    /// </summary>
     public static class Ui
     {
-        public static readonly Color PanelColor = new Color(0.055f, 0.07f, 0.10f, 0.93f);
-        public static readonly Color PanelBorder = new Color(0.86f, 0.71f, 0.36f, 0.35f);
-        public static readonly Color Accent = new Color(0.87f, 0.72f, 0.38f);
-        public static readonly Color Text = new Color(0.93f, 0.94f, 0.96f);
-        public static readonly Color TextDim = new Color(0.62f, 0.66f, 0.73f);
-        public static readonly Color Good = new Color(0.50f, 0.82f, 0.55f);
-        public static readonly Color Bad = new Color(0.93f, 0.47f, 0.42f);
-        public static readonly Color ButtonColor = new Color(0.15f, 0.18f, 0.24f);
-        public static readonly Color ButtonHover = new Color(0.22f, 0.27f, 0.35f);
-        public static readonly Color PrimaryColor = new Color(0.62f, 0.47f, 0.18f);
-        public static readonly Color PrimaryHover = new Color(0.74f, 0.57f, 0.24f);
-        public static readonly Color Divider = new Color(1f, 1f, 1f, 0.08f);
+        public static readonly Color Gold = new Color32(226, 188, 104, 255);
+        public static readonly Color Text = new Color32(230, 233, 238, 255);
+        public static readonly Color TextDim = new Color32(150, 160, 176, 255);
+        public static readonly Color Good = new Color32(126, 212, 136, 255);
+        public static readonly Color Bad = new Color32(240, 116, 104, 255);
+        public static readonly Color Warn = new Color32(242, 196, 92, 255);
+        public static readonly Color Neutral = new Color32(200, 205, 214, 255);
+
+        // Kept for older call sites.
+        public static Color Accent => Gold;
 
         public static AudioManager Audio { get; set; }
 
-        public static VisualElement Element(string name = null, bool pickable = false)
+        // ------------------------------------------------------------------ resources
+
+        static Font _regular, _medium, _semiBold, _bold, _title;
+        static readonly Dictionary<string, Texture2D> Icons = new Dictionary<string, Texture2D>();
+        static readonly Dictionary<string, Texture2D> Flags = new Dictionary<string, Texture2D>();
+
+        public enum Weight
         {
-            var e = new VisualElement { name = name };
+            Regular,
+            Medium,
+            SemiBold,
+            Bold,
+            Title,
+        }
+
+        static Font LoadFont(ref Font cache, string name)
+        {
+            if (cache == null)
+                cache = Resources.Load<Font>("Fonts/" + name);
+            return cache;
+        }
+
+        public static Font FontFor(Weight weight)
+        {
+            switch (weight)
+            {
+                case Weight.Medium: return LoadFont(ref _medium, "BarlowSemiCondensed-Medium");
+                case Weight.SemiBold: return LoadFont(ref _semiBold, "BarlowSemiCondensed-SemiBold");
+                case Weight.Bold: return LoadFont(ref _bold, "BarlowSemiCondensed-Bold");
+                case Weight.Title: return LoadFont(ref _title, "BarlowCondensed-Bold");
+                default: return LoadFont(ref _regular, "BarlowSemiCondensed-Regular");
+            }
+        }
+
+        public static void SetFont(VisualElement e, Weight weight)
+        {
+            var font = FontFor(weight);
+            if (font != null)
+                e.style.unityFontDefinition = FontDefinition.FromFont(font);
+        }
+
+        public static Texture2D Icon(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            if (!Icons.TryGetValue(name, out var tex))
+            {
+                tex = Resources.Load<Texture2D>("Icons/" + name);
+                Icons[name] = tex;
+            }
+            return tex;
+        }
+
+        public static Texture2D Flag(string tag)
+        {
+            if (string.IsNullOrEmpty(tag))
+                return null;
+            if (!Flags.TryGetValue(tag, out var tex))
+            {
+                tex = Resources.Load<Texture2D>("Flags/" + tag);
+                Flags[tag] = tex;
+            }
+            return tex;
+        }
+
+        // ------------------------------------------------------------------ elements
+
+        public static VisualElement Element(string className = null, bool pickable = false)
+        {
+            var e = new VisualElement();
+            if (!string.IsNullOrEmpty(className))
+                foreach (var c in className.Split(' '))
+                    e.AddToClassList(c);
             e.pickingMode = pickable ? PickingMode.Position : PickingMode.Ignore;
             return e;
         }
 
-        public static VisualElement Row()
+        public static VisualElement Row(string className = null)
         {
-            var e = Element();
+            var e = Element(className);
             e.style.flexDirection = FlexDirection.Row;
             e.style.alignItems = Align.Center;
             return e;
         }
 
-        public static VisualElement Column()
+        public static VisualElement Column(string className = null)
         {
-            var e = Element();
+            var e = Element(className);
             e.style.flexDirection = FlexDirection.Column;
             return e;
         }
 
-        /// <summary>A framed, opaque panel that blocks clicks to the map.</summary>
-        public static VisualElement Panel(float padding = 14)
+        public static VisualElement Spacer()
         {
-            var e = Element(null, true);
-            e.style.backgroundColor = PanelColor;
-            Border(e, PanelBorder, 1);
-            Radius(e, 8);
-            Padding(e, padding);
+            var e = Element();
+            e.style.flexGrow = 1;
             return e;
         }
 
-        public static Label Label(string text, int size = 15, Color? color = null, bool bold = false)
+        /// <summary>A framed panel that blocks clicks to the map.</summary>
+        public static VisualElement Panel(string extraClass = null)
         {
-            var l = new Label(text);
-            l.pickingMode = PickingMode.Ignore;
+            var e = Element("gs-panel" + (extraClass == null ? "" : " " + extraClass), true);
+            return e;
+        }
+
+        public static Label Label(string text, int size = 15, Color? color = null, Weight weight = Weight.Regular, string className = null)
+        {
+            var l = new Label(text) { pickingMode = PickingMode.Ignore };
+            l.AddToClassList("gs-text");
+            if (!string.IsNullOrEmpty(className))
+                foreach (var c in className.Split(' '))
+                    l.AddToClassList(c);
             l.style.fontSize = size;
-            l.style.color = color ?? Text;
-            l.style.unityFontStyleAndWeight = bold ? FontStyle.Bold : FontStyle.Normal;
-            l.style.marginLeft = 0;
-            l.style.marginRight = 0;
-            l.style.paddingLeft = 0;
-            l.style.paddingRight = 0;
-            l.style.whiteSpace = WhiteSpace.Normal;
+            if (color.HasValue)
+                l.style.color = color.Value;
+            SetFont(l, weight);
             return l;
         }
 
-        public static Button Button(string text, Action onClick, bool primary = false, int fontSize = 15)
+        // Older call sites used a bool for bold.
+        public static Label Label(string text, int size, Color? color, bool bold) =>
+            Label(text, size, color, bold ? Weight.Bold : Weight.Regular);
+
+        public static Label Title(string text, int size = 26) => Label(text, size, null, Weight.Title, "gs-title");
+
+        public static Label SectionTitle(string text)
         {
-            var normal = primary ? PrimaryColor : ButtonColor;
-            var hover = primary ? PrimaryHover : ButtonHover;
+            var l = Label(text.ToUpperInvariant(), 13, null, Weight.SemiBold, "gs-section-title");
+            return l;
+        }
+
+        public static VisualElement IconElement(string name, int size = 18, Color? tint = null, string extraClass = null)
+        {
+            var e = Element("gs-icon" + (extraClass == null ? "" : " " + extraClass));
+            var tex = Icon(name);
+            if (tex != null)
+                e.style.backgroundImage = new StyleBackground(tex);
+            e.style.width = size;
+            e.style.height = size;
+            if (tint.HasValue)
+                e.style.unityBackgroundImageTintColor = tint.Value;
+            return e;
+        }
+
+        public static VisualElement FlagElement(string tag, string sizeClass = null)
+        {
+            var e = Element("gs-flag" + (sizeClass == null ? "" : " " + sizeClass));
+            var tex = Flag(tag);
+            if (tex != null)
+                e.style.backgroundImage = new StyleBackground(tex);
+            else
+                e.style.backgroundColor = new Color(0.3f, 0.3f, 0.3f);
+            return e;
+        }
+
+        public static void SetFlag(VisualElement e, string tag)
+        {
+            var tex = Flag(tag);
+            e.style.backgroundImage = tex != null ? new StyleBackground(tex) : new StyleBackground(StyleKeyword.None);
+        }
+
+        public static Button Button(string text, Action onClick, bool primary = false, int fontSize = 15, string icon = null)
+        {
             var b = new Button(() =>
             {
                 Audio?.Play(Sfx.UiClick);
                 onClick?.Invoke();
-            })
-            {
-                text = text,
-            };
-            // Not focusable, so Space/Enter never "click" a button the mouse pressed earlier;
-            // those keys belong to the game (e.g. Space pauses).
-            b.focusable = false;
+            });
+            b.text = icon == null ? text : "";
+            b.focusable = false; // Space/Enter belong to the game (Space pauses)
+            b.AddToClassList("gs-btn");
+            if (primary)
+                b.AddToClassList("gs-btn--primary");
             b.style.fontSize = fontSize;
-            b.style.color = Text;
-            b.style.unityFontStyleAndWeight = primary ? FontStyle.Bold : FontStyle.Normal;
-            b.style.backgroundColor = normal;
-            Border(b, primary ? Accent : new Color(1f, 1f, 1f, 0.12f), 1);
-            Radius(b, 5);
-            b.style.paddingLeft = 12;
-            b.style.paddingRight = 12;
-            b.style.paddingTop = 6;
-            b.style.paddingBottom = 6;
-            b.style.marginLeft = 3;
-            b.style.marginRight = 3;
-            b.style.marginTop = 3;
-            b.style.marginBottom = 3;
+            SetFont(b, primary ? Weight.Bold : Weight.SemiBold);
+            if (icon != null)
+            {
+                b.style.flexDirection = FlexDirection.Row;
+                b.style.alignItems = Align.Center;
+                b.Add(IconElement(icon, fontSize + 3, primary ? new Color(0.1f, 0.08f, 0.03f) : (Color?)null));
+                if (!string.IsNullOrEmpty(text))
+                {
+                    var l = Label(text, fontSize, primary ? new Color(0.1f, 0.08f, 0.03f) : (Color?)null, primary ? Weight.Bold : Weight.SemiBold);
+                    l.style.marginLeft = 6;
+                    b.Add(l);
+                }
+            }
             b.RegisterCallback<PointerEnterEvent>(_ =>
             {
-                if (!b.enabledInHierarchy) return;
-                b.style.backgroundColor = hover;
-                Audio?.Play(Sfx.UiHover);
+                if (b.enabledInHierarchy)
+                    Audio?.Play(Sfx.UiHover);
             });
-            b.RegisterCallback<PointerLeaveEvent>(_ => b.style.backgroundColor = normal);
+            return b;
+        }
+
+        public static Button IconButton(string icon, Action onClick, int size = 18)
+        {
+            var b = Button(null, onClick, false, size, icon);
+            b.AddToClassList("gs-btn--icon");
             return b;
         }
 
@@ -121,28 +241,61 @@ namespace GrandStrategy.Game.UI
             return e;
         }
 
-        public static VisualElement DividerLine()
-        {
-            var e = Element();
-            e.style.height = 1;
-            e.style.backgroundColor = Divider;
-            e.style.marginTop = 10;
-            e.style.marginBottom = 10;
-            return e;
-        }
+        public static VisualElement DividerLine() => Element("gs-divider");
 
-        public static VisualElement StatRow(string label, string value, Color? valueColor = null)
+        public static VisualElement StatRow(string label, string value, Color? valueColor = null, string icon = null)
         {
-            var row = Row();
-            row.style.justifyContent = Justify.SpaceBetween;
-            row.style.marginTop = 2;
-            row.style.marginBottom = 2;
-            row.Add(Label(label, 14, TextDim));
-            var v = Label(value, 14, valueColor ?? Text, true);
+            var row = Element("gs-stat-row", true);
+            var left = Row();
+            if (icon != null)
+            {
+                var i = IconElement(icon, 16);
+                i.style.marginRight = 6;
+                left.Add(i);
+            }
+            left.Add(Label(label, 14, TextDim));
+            row.Add(left);
+            var v = Label(value, 15, valueColor ?? Text, Weight.SemiBold);
             v.style.unityTextAlign = TextAnchor.MiddleRight;
             row.Add(v);
             return row;
         }
+
+        /// <summary>A small labelled value box for two-column grids.</summary>
+        public static VisualElement StatCard(string icon, string label, string value, Color? valueColor = null)
+        {
+            var card = Element("gs-stat-card", true);
+            if (icon != null)
+            {
+                var i = IconElement(icon, 22);
+                i.style.marginRight = 8;
+                card.Add(i);
+            }
+            var col = Column();
+            col.Add(Label(label, 12, null, Weight.Medium, "gs-stat-card__label"));
+            col.Add(Label(value, 18, valueColor, Weight.SemiBold, "gs-stat-card__value"));
+            card.Add(col);
+            return card;
+        }
+
+        /// <summary>A 0..1 progress bar, optionally with a marker for where the value is heading.</summary>
+        public static VisualElement Bar(double value, Color color, double? marker = null)
+        {
+            var bar = Element("gs-bar");
+            var fill = Element("gs-bar__fill");
+            fill.style.width = Length.Percent((float)(Math.Max(0, Math.Min(1, value)) * 100));
+            fill.style.backgroundColor = color;
+            bar.Add(fill);
+            if (marker.HasValue)
+            {
+                var m = Element("gs-bar__marker");
+                m.style.left = Length.Percent((float)(Math.Max(0, Math.Min(1, marker.Value)) * 100));
+                bar.Add(m);
+            }
+            return bar;
+        }
+
+        // ------------------------------------------------------------------ layout helpers
 
         public static void Absolute(VisualElement e, float? left = null, float? top = null, float? right = null, float? bottom = null)
         {
@@ -186,24 +339,50 @@ namespace GrandStrategy.Game.UI
         public static void Show(VisualElement e, bool visible) =>
             e.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
+        public static bool IsShown(VisualElement e) => e.resolvedStyle.display != DisplayStyle.None && e.style.display != DisplayStyle.None;
+
         public static Color ToColor(int rgb) =>
             new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
 
+        // ------------------------------------------------------------------ formatting
+
+        static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
         public static string FormatPopulation(long people)
         {
-            if (people >= 1_000_000_000) return (people / 1e9).ToString("0.00") + "B";
-            if (people >= 1_000_000) return (people / 1e6).ToString("0.0") + "M";
-            if (people >= 1_000) return (people / 1e3).ToString("0") + "K";
-            return people.ToString();
+            if (people >= 1_000_000_000) return (people / 1e9).ToString("0.00", Inv) + "B";
+            if (people >= 1_000_000) return (people / 1e6).ToString("0.0", Inv) + "M";
+            if (people >= 1_000) return (people / 1e3).ToString("0", Inv) + "K";
+            return people.ToString(Inv);
         }
 
         public static string FormatMoneyMillions(double millions)
         {
-            if (millions >= 1_000_000) return "$" + (millions / 1e6).ToString("0.00") + "T";
-            if (millions >= 1_000) return "$" + (millions / 1e3).ToString("0.0") + "B";
-            return "$" + millions.ToString("0") + "M";
+            double a = Math.Abs(millions);
+            string sign = millions < 0 ? "-" : "";
+            if (a >= 1_000_000) return sign + "$" + (a / 1e6).ToString("0.00", Inv) + "T";
+            if (a >= 1_000) return sign + "$" + (a / 1e3).ToString(a >= 100_000 ? "0" : "0.0", Inv) + "B";
+            return sign + "$" + a.ToString("0", Inv) + "M";
         }
 
-        public static string FormatPercent(double value) => (value * 100).ToString("0") + "%";
+        public static string FormatSignedMoney(double millions) => (millions >= 0 ? "+" : "") + FormatMoneyMillions(millions);
+
+        /// <summary>0.253 -> "25%".</summary>
+        public static string FormatPercent(double value) => (value * 100).ToString("0", Inv) + "%";
+
+        /// <summary>0.253 -> "25.3%".</summary>
+        public static string FormatPercent1(double value) => (value * 100).ToString("0.0", Inv) + "%";
+
+        /// <summary>2.35 -> "+2.4%" (value already in percent).</summary>
+        public static string FormatGrowth(double percent) => (percent >= 0 ? "+" : "") + percent.ToString("0.0", Inv) + "%";
+
+        public static string FormatSigned(double v, string format = "0.#") => (v >= 0 ? "+" : "") + v.ToString(format, Inv);
+
+        public static Color ScoreColor(double value, double bad, double good)
+        {
+            if (good > bad)
+                return value >= good ? Good : value <= bad ? Bad : Warn;
+            return value <= good ? Good : value >= bad ? Bad : Warn;
+        }
     }
 }

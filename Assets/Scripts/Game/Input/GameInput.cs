@@ -26,6 +26,11 @@ namespace GrandStrategy.Game
         MapMode1,
         MapMode2,
         MapMode3,
+        MapMode4,
+        MapMode5,
+        MapMode6,
+        MapMode7,
+        DevPanel,
     }
 
     public enum PointerButton
@@ -67,6 +72,11 @@ namespace GrandStrategy.Game
                 case GameKey.MapMode1: return new[] { Key.F1 };
                 case GameKey.MapMode2: return new[] { Key.F2 };
                 case GameKey.MapMode3: return new[] { Key.F3 };
+                case GameKey.MapMode4: return new[] { Key.F4 };
+                case GameKey.MapMode5: return new[] { Key.F5 };
+                case GameKey.MapMode6: return new[] { Key.F6 };
+                case GameKey.MapMode7: return new[] { Key.F7 };
+                case GameKey.DevPanel: return new[] { Key.F12 };
                 default: return System.Array.Empty<Key>();
             }
         }
@@ -158,6 +168,11 @@ namespace GrandStrategy.Game
                 case GameKey.MapMode1: return new[] { KeyCode.F1 };
                 case GameKey.MapMode2: return new[] { KeyCode.F2 };
                 case GameKey.MapMode3: return new[] { KeyCode.F3 };
+                case GameKey.MapMode4: return new[] { KeyCode.F4 };
+                case GameKey.MapMode5: return new[] { KeyCode.F5 };
+                case GameKey.MapMode6: return new[] { KeyCode.F6 };
+                case GameKey.MapMode7: return new[] { KeyCode.F7 };
+                case GameKey.DevPanel: return new[] { KeyCode.F12 };
                 default: return System.Array.Empty<KeyCode>();
             }
         }

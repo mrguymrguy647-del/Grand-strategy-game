@@ -23,6 +23,16 @@ namespace GrandStrategy.Simulation
         }
 
         public string Tag { get; }
+
+        /// <summary>Position in <see cref="WorldState.Countries"/>; used by per-pair tables.</summary>
+        public int Index { get; internal set; } = -1;
+
+        /// <summary>Budget, debt and growth. Null until a <see cref="GameSimulation"/> is created.</summary>
+        public EconomyState Economy { get; internal set; }
+
+        /// <summary>Government, stability, approval and elections. Null until a simulation exists.</summary>
+        public PoliticsState Politics { get; internal set; }
+
         public string Name { get; }
         public string FormalName { get; }
 

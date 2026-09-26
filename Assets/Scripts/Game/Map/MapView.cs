@@ -8,8 +8,12 @@ namespace GrandStrategy.Game.Map
     public enum MapMode
     {
         Political,
-        Population,
+        Diplomatic,
         Wealth,
+        Growth,
+        Stability,
+        Government,
+        Population,
     }
 
     /// <summary>
@@ -73,6 +77,11 @@ namespace GrandStrategy.Game.Map
         static readonly int SelectedIdId = Shader.PropertyToID("_SelectedId");
         static readonly int HoverIdId = Shader.PropertyToID("_HoverId");
         static readonly int TintStrengthId = Shader.PropertyToID("_TintStrength");
+        static readonly int SelectedOwnerId = Shader.PropertyToID("_SelectedOwner");
+        static readonly int PlayerOwnerId = Shader.PropertyToID("_PlayerOwner");
+
+        GameSimulation _sim;
+        Country _diplomacyReference;
 
         public MapMode Mode { get; private set; } = MapMode.Political;
 
@@ -87,9 +96,10 @@ namespace GrandStrategy.Game.Map
 
         public event Action<MapMode> ModeChanged;
 
-        public void Initialize(WorldState world, MapAssets assets)
+        public void Initialize(WorldState world, MapAssets assets, GameSimulation sim)
         {
             _world = world;
+            _sim = sim;
             _assets = assets;
             _width = assets.Width;
             _height = assets.Height;
@@ -103,6 +113,10 @@ namespace GrandStrategy.Game.Map
 
             _subscriptions.Add(world.Events.Subscribe<ProvinceOwnerChanged>(_ => _dirty = true));
             _subscriptions.Add(world.Events.Subscribe<PlayerCountryChanged>(_ => _dirty = true));
+            // Data map modes follow the monthly simulation; the diplomatic one also follows actions.
+            _subscriptions.Add(world.Events.Subscribe<SimulationTicked>(_ => _dirty |= Mode != MapMode.Political && Mode != MapMode.Population));
+            _subscriptions.Add(world.Events.Subscribe<DiplomacyChanged>(_ => _dirty |= Mode == MapMode.Diplomatic));
+            _subscriptions.Add(world.Events.Subscribe<GovernmentOverthrown>(_ => _dirty |= Mode != MapMode.Political));
 
             var shader = Resources.Load<Shader>("Shaders/WorldMap");
             if (shader != null && shader.isSupported && SystemInfo.graphicsShaderLevel >= 35)
@@ -157,6 +171,8 @@ namespace GrandStrategy.Game.Map
             _material.SetVector(LutSizeId, new Vector4(LutWidth, lutHeight, 1f / LutWidth, 1f / lutHeight));
             _material.SetFloat(SelectedIdId, 0);
             _material.SetFloat(HoverIdId, 0);
+            _material.SetFloat(SelectedOwnerId, 0);
+            _material.SetFloat(PlayerOwnerId, 0);
 
             _mesh = CreateQuad(WorldRect);
             gameObject.AddComponent<MeshFilter>().sharedMesh = _mesh;
@@ -323,6 +339,33 @@ namespace GrandStrategy.Game.Map
             return p == null ? Vector3.zero : PixelToWorld(p.CenterX, p.CenterY);
         }
 
+        /// <summary>Owner index as stored in the colour table (matches the shader's decoding).</summary>
+        static float OwnerCode(Country c) => c == null ? 0 : 1 + c.Index % (WaterOwner - 1);
+
+        /// <summary>Highlights a whole country (gold outline) — the one whose panel is open.</summary>
+        public void SetSelectedCountry(Country country)
+        {
+            if (_gpu)
+                _material.SetFloat(SelectedOwnerId, OwnerCode(country));
+        }
+
+        /// <summary>Gives the player's nation a subtle gold border.</summary>
+        public void SetPlayerCountry(Country country)
+        {
+            if (_gpu)
+                _material.SetFloat(PlayerOwnerId, OwnerCode(country));
+        }
+
+        /// <summary>The country the diplomatic map mode is drawn from (you, or the one you're inspecting).</summary>
+        public void SetDiplomacyReference(Country country)
+        {
+            if (_diplomacyReference == country)
+                return;
+            _diplomacyReference = country;
+            if (Mode == MapMode.Diplomatic)
+                _dirty = true;
+        }
+
         public void SetSelected(int provinceId)
         {
             if (_gpu)
@@ -423,6 +466,7 @@ namespace GrandStrategy.Game.Map
 
             foreach (var p in _world.Provinces)
             {
+                var owner = _world.GetCountry(p.OwnerTag);
                 Color32 fill;
                 switch (Mode)
                 {
@@ -434,14 +478,63 @@ namespace GrandStrategy.Game.Map
                             ? UnownedColor
                             : Gradient((Math.Log(WealthPerCapita(p)) - Math.Log(minWealth)) / Math.Max(1e-6, Math.Log(maxWealth) - Math.Log(minWealth)), WealthRamp);
                         break;
+                    case MapMode.Diplomatic:
+                        fill = DiplomaticColor(owner);
+                        break;
+                    case MapMode.Growth:
+                        fill = owner?.Economy == null ? UnownedColor : Gradient((owner.Economy.RealGrowth + 3) / 11.0, WealthRamp);
+                        break;
+                    case MapMode.Stability:
+                        fill = owner?.Politics == null ? UnownedColor : Gradient(owner.Politics.Stability / 100.0, WealthRamp);
+                        break;
+                    case MapMode.Government:
+                        fill = owner?.Politics == null ? UnownedColor : GovernmentColor(owner.Politics.Government);
+                        break;
                     default:
-                        var owner = _world.GetCountry(p.OwnerTag);
                         fill = owner == null ? UnownedColor : Rgb(owner.ColorRgb);
                         break;
                 }
                 _fill[p.Id] = fill;
                 _provinceEdge[p.Id] = Scale(fill, 0.80f);
                 _countryEdge[p.Id] = Scale(fill, 0.38f);
+            }
+        }
+
+        static readonly Color32 SelfColor = new Color32(232, 190, 90, 255);
+        static readonly Color32 AllyColor = new Color32(70, 130, 220, 255);
+        static readonly Color32 SanctionColor = new Color32(120, 24, 24, 255);
+        static readonly Color32[] RelationRamp =
+        {
+            new Color32(200, 50, 45, 255), new Color32(220, 130, 80, 255), new Color32(170, 170, 160, 255),
+            new Color32(120, 190, 110, 255), new Color32(40, 150, 80, 255),
+        };
+
+        Color32 DiplomaticColor(Country owner)
+        {
+            var reference = _diplomacyReference;
+            if (owner == null || _sim == null)
+                return UnownedColor;
+            if (reference == null)
+                return Rgb(owner.ColorRgb);
+            if (owner == reference)
+                return SelfColor;
+            var d = _sim.Diplomacy;
+            if (d.AreAllied(owner, reference))
+                return AllyColor;
+            if (d.AnySanctions(owner, reference))
+                return SanctionColor;
+            return Gradient((d.Relations(owner, reference) + 100) / 200.0, RelationRamp);
+        }
+
+        static Color32 GovernmentColor(GovernmentType g)
+        {
+            switch (g)
+            {
+                case GovernmentType.FullDemocracy: return new Color32(40, 90, 200, 255);
+                case GovernmentType.FlawedDemocracy: return new Color32(110, 160, 230, 255);
+                case GovernmentType.HybridRegime: return new Color32(230, 190, 70, 255);
+                case GovernmentType.Authoritarian: return new Color32(200, 60, 50, 255);
+                default: return new Color32(140, 70, 170, 255);
             }
         }
 
